@@ -9,6 +9,8 @@ import 'maplibre-gl/dist/maplibre-gl.css'
 
 maplibregl.setWorkerUrl(workerUrl)
 
+const TOKYO_CENTER: [number, number] = [139.7671, 35.6812]
+
 interface Props {
   points: PricePoint[]
   dataset: Dataset
@@ -35,10 +37,10 @@ export function MapCanvas(props: Props) {
       map = new maplibregl.Map({
         container: container.current,
         style: 'https://tiles.openfreemap.org/styles/dark',
-        bounds: JAPAN_BOUNDS,
+        center: latest.current.position ?? TOKYO_CENTER,
+        zoom: 13,
         maxBounds: JAPAN_BOUNDS,
-        fitBoundsOptions: { padding: 40 },
-        pitch: 0,
+        pitch: latest.current.mode === '3d' ? 48 : 0,
         bearing: 0,
         minZoom: 2,
         maxZoom: 17,

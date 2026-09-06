@@ -1,5 +1,8 @@
 import type { Feature, Point } from 'geojson'
-import { type Bounds, type Dataset, JAPAN_BOUNDS, type PricePoint } from '../src/types'
+import { inBounds } from '../src/tiles'
+import { type Dataset, JAPAN_BOUNDS, type PricePoint } from '../src/types'
+
+export { clipBounds, inBounds, tilesForBounds } from '../src/tiles'
 
 export function numberValue(value: unknown): number | undefined {
   if (typeof value === 'number') return Number.isFinite(value) ? value : undefined
@@ -28,7 +31,7 @@ function stringValue(value: unknown): string | undefined {
 export function normalizePoint(
   feature: Feature,
   dataset: Dataset,
-  index: number,
+  index: number | string,
 ): PricePoint | undefined {
   if (feature.geometry?.type !== 'Point') return undefined
   const coordinates = (feature.geometry as Point).coordinates as [number, number]
@@ -79,36 +82,4 @@ export function normalizePoint(
     zoning: stringValue(p.regulations_use_category_name_ja),
     period: stringValue(p.target_year_name_ja),
   }
-}
-
-export function inBounds([lng, lat]: number[], [west, south, east, north]: Bounds) {
-  return lng >= west && lng <= east && lat >= south && lat <= north
-}
-
-export function clipBounds(bounds: Bounds): Bounds | undefined {
-  const clipped: Bounds = [
-    Math.max(bounds[0], JAPAN_BOUNDS[0]),
-    Math.max(bounds[1], JAPAN_BOUNDS[1]),
-    Math.min(bounds[2], JAPAN_BOUNDS[2]),
-    Math.min(bounds[3], JAPAN_BOUNDS[3]),
-  ]
-  return clipped[0] <= clipped[2] && clipped[1] <= clipped[3] ? clipped : undefined
-}
-
-export function tilesForBounds(bounds: Bounds, z: number, limit = 160) {
-  const n = 2 ** z
-  const x = (lng: number) => Math.floor(((lng + 180) / 360) * n)
-  const y = (lat: number) =>
-    Math.floor(((1 - Math.asinh(Math.tan((lat * Math.PI) / 180)) / Math.PI) / 2) * n)
-  if ((x(bounds[2]) - x(bounds[0]) + 1) * (y(bounds[1]) - y(bounds[3]) + 1) > limit)
-    return undefined
-  const tiles: { z: number; x: number; y: number }[] = []
-  for (let tx = x(bounds[0]); tx <= x(bounds[2]); tx++) {
-    for (let ty = y(bounds[3]); ty <= y(bounds[1]); ty++) tiles.push({ z, x: tx, y: ty })
-  }
-  const centerX = (x(bounds[0]) + x(bounds[2])) / 2
-  const centerY = (y(bounds[3]) + y(bounds[1])) / 2
-  return tiles.sort(
-    (a, b) => Math.hypot(a.x - centerX, a.y - centerY) - Math.hypot(b.x - centerX, b.y - centerY),
-  )
 }

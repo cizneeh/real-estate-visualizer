@@ -10,10 +10,12 @@
     "lint": "tsc --noEmit && biome check .",
     "fix": "biome check . --write .",
     "test": "tsx --test tests/*.test.ts",
-    "test:e2e": "tsx tests/browser.ts"
+    "test:e2e": "tsx tests/browser.ts",
+    "test:e2e:cache": "tsx tests/browser-cache.ts"
   },
   "dependencies": {
     "@hono/node-server": "^2.1.1",
+    "@tanstack/react-query": "^5.102.8",
     "dotenv": "^17.4.2",
     "hono": "^4.13.7",
     "lucide-react": "^1.41.0",
