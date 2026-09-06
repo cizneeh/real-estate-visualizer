@@ -3,7 +3,8 @@ import * as maplibregl from 'maplibre-gl'
 import workerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url'
 import { useEffect, useRef, useState } from 'react'
 import { configureBasemap } from './mapStyle'
-import { columnCollection, pointCollection } from './metrics'
+import { PRICE_COLORS, pointCollection } from './metrics'
+import { PriceColumnLayer } from './PriceColumnLayer'
 import { type Bounds, type Dataset, JAPAN_BOUNDS, type PricePoint, type ViewMode } from './types'
 import 'maplibre-gl/dist/maplibre-gl.css'
 
@@ -16,6 +17,7 @@ interface Props {
   dataset: Dataset
   mode: ViewMode
   position?: [number, number]
+  selectedId?: string
   onBounds: (bounds: Bounds) => void
   onSelect: (point: PricePoint) => void
   onReady: (map: LibreMap) => void
@@ -25,6 +27,7 @@ interface Props {
 export function MapCanvas(props: Props) {
   const container = useRef<HTMLElement>(null)
   const mapRef = useRef<LibreMap | undefined>(undefined)
+  const columnsRef = useRef<PriceColumnLayer | undefined>(undefined)
   const latest = useRef(props)
   latest.current = props
   const [ready, setReady] = useState(false)
@@ -47,7 +50,7 @@ export function MapCanvas(props: Props) {
         maxPitch: 65,
         renderWorldCopies: false,
         attributionControl: { compact: true },
-        canvasContextAttributes: { preserveDrawingBuffer: true },
+        canvasContextAttributes: { preserveDrawingBuffer: true, antialias: true },
       })
     } catch {
       setError('地図の描画を開始できませんでした。WebGLが利用できるブラウザで開いてください。')
@@ -72,7 +75,6 @@ export function MapCanvas(props: Props) {
     map.on('load', () => {
       configureBasemap(map)
       map.addSource('prices', { type: 'geojson', data: pointCollection([], 'land') })
-      map.addSource('columns', { type: 'geojson', data: columnCollection([], 'land') })
       map.addLayer({
         id: 'price-heat',
         type: 'heatmap',
@@ -88,17 +90,17 @@ export function MapCanvas(props: Props) {
             ['linear'],
             ['heatmap-density'],
             0,
-            'rgba(84,196,221,0)',
+            'rgba(86,143,175,0)',
             0.2,
-            '#387785',
+            PRICE_COLORS[0],
             0.45,
-            '#638fea',
+            PRICE_COLORS[1],
             0.65,
-            '#a18aee',
+            PRICE_COLORS[2],
             0.85,
-            '#ed99cf',
+            PRICE_COLORS[4],
             1,
-            '#ffc77b',
+            PRICE_COLORS[5],
           ],
         },
       })
@@ -125,31 +127,37 @@ export function MapCanvas(props: Props) {
           'circle-stroke-color': '#d3ffff',
         },
       })
-      map.addLayer({
-        id: 'price-columns',
-        type: 'fill-extrusion',
-        source: 'columns',
-        paint: {
-          'fill-extrusion-color': ['get', 'color'],
-          'fill-extrusion-height': ['get', 'height'],
-          'fill-extrusion-opacity': 1,
-          'fill-extrusion-base': 0,
-        },
+      const columns = new PriceColumnLayer()
+      columnsRef.current = columns
+      map.addLayer(columns)
+      map.on('webglcontextrestored', () => {
+        map.once('style.load', () => {
+          if (!map.getLayer(columns.id)) map.addLayer(columns)
+          columns.setData(latest.current.points, latest.current.dataset)
+          columns.setVisible(latest.current.mode === '3d')
+          columns.setSelected(latest.current.selectedId)
+        })
       })
-      map.on('click', (event) => {
-        const features = map.queryRenderedFeatures(event.point, {
-          layers: ['price-columns', 'price-points'],
+      const hitPoint = (screen: { x: number; y: number }) => {
+        const column = columns.pick(screen)
+        if (column) return column
+        if (latest.current.mode === '3d') return undefined
+        const features = map.queryRenderedFeatures([screen.x, screen.y], {
+          layers: ['price-points'],
         })
         const id = features[0]?.properties?.id
-        const point = latest.current.points.find((p) => p.id === id)
+        return latest.current.points.find((point) => point.id === id)
+      }
+      map.on('click', (event) => {
+        const point = hitPoint(event.point)
         if (point) latest.current.onSelect(point)
       })
       map.on('mousemove', (event) => {
-        const hit = map.queryRenderedFeatures(event.point, {
-          layers: ['price-columns', 'price-points'],
-        })
-        map.getCanvas().style.cursor = hit.length ? 'pointer' : ''
+        const point = hitPoint(event.point)
+        columns.setHovered(point?.id)
+        map.getCanvas().style.cursor = point ? 'pointer' : ''
       })
+      map.getCanvas().addEventListener('mouseleave', () => columns.setHovered(undefined))
       setReady(true)
       latest.current.onReady(map)
       emitBounds()
@@ -165,6 +173,7 @@ export function MapCanvas(props: Props) {
       resize.disconnect()
       map.remove()
       mapRef.current = undefined
+      columnsRef.current = undefined
     }
   }, [])
 
@@ -176,21 +185,27 @@ export function MapCanvas(props: Props) {
     ;(map.getSource('prices') as GeoJSONSource).setData(
       pointCollection(props.points, props.dataset),
     )
-    ;(map.getSource('columns') as GeoJSONSource).setData(
-      columnCollection(props.points, props.dataset),
-    )
+    columnsRef.current?.setData(props.points, props.dataset)
   }, [props.points, props.dataset, ready])
 
   useEffect(() => {
     const map = mapRef.current
     if (!map || !ready) return
     const heat = props.mode === 'heatmap' && props.dataset !== 'change'
-    map.setLayoutProperty('price-columns', 'visibility', props.mode === '3d' ? 'visible' : 'none')
+    columnsRef.current?.setVisible(props.mode === '3d')
+    map.setLayoutProperty('price-points', 'visibility', props.mode === '3d' ? 'none' : 'visible')
+    map.setLayoutProperty('price-glow', 'visibility', props.mode === '3d' ? 'none' : 'visible')
     map.setLayoutProperty('price-heat', 'visibility', heat ? 'visible' : 'none')
     map.setPaintProperty('price-points', 'circle-opacity', heat ? 0.2 : 0.95)
     const pitch = props.mode === '3d' ? 48 : 0
-    if (Math.abs(map.getPitch() - pitch) > 0.1) map.easeTo({ pitch, duration: 700 })
+    const duration = window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 700
+    if (Math.abs(map.getPitch() - pitch) > 0.1) map.easeTo({ pitch, duration })
   }, [props.mode, props.dataset, ready])
+
+  useEffect(() => {
+    if (!ready) return
+    columnsRef.current?.setSelected(props.selectedId)
+  }, [props.selectedId, ready])
 
   useEffect(() => {
     const map = mapRef.current

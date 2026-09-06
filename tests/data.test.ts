@@ -3,7 +3,7 @@ import { test } from 'node:test'
 import type { Feature } from 'geojson'
 import { createApp } from '../server/app'
 import { clipBounds, normalizePoint, numberValue, tilesForBounds, yenValue } from '../server/data'
-import { columnCollection, groupTransactions, median } from '../src/metrics'
+import { groupTransactions, median } from '../src/metrics'
 import { type Bounds, JAPAN_BOUNDS, type PricePoint } from '../src/types'
 
 const feature = (properties: Record<string, unknown>): Feature => ({
@@ -80,8 +80,6 @@ test('transaction groups use a median and keep the actual sample count', () => {
   assert.equal(grouped[0].count, 3)
   assert.equal(median([10, 20]), 15)
   assert.equal(median([]), undefined)
-  const polygon = columnCollection(grouped, 'transactions').features[0].geometry.coordinates[0]
-  assert.deepEqual(polygon[0], polygon[polygon.length - 1])
 })
 
 test('requests cover Japan including Hokkaido, Okinawa, and remote islands', () => {

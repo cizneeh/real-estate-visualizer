@@ -303,6 +303,7 @@ export function App() {
           dataset={dataset}
           mode={mode}
           position={position}
+          selectedId={selected?.id}
           onBounds={handleBounds}
           onSelect={handleSelect}
           onReady={handleReady}
@@ -367,33 +368,6 @@ export function App() {
               </button>
             ))}
           </fieldset>
-          <div className="zoom-controls">
-            <button type="button" aria-label="ズームイン" onClick={() => map?.zoomIn()}>
-              <Plus size={19} />
-            </button>
-            <button type="button" aria-label="ズームアウト" onClick={() => map?.zoomOut()}>
-              <Minus size={19} />
-            </button>
-            <button
-              type="button"
-              aria-label="北を上にする"
-              onClick={() => map?.easeTo({ bearing: 0, duration: 500 })}
-            >
-              <Compass size={19} />
-            </button>
-            <button
-              type="button"
-              aria-label="現在地に戻る"
-              title="現在地に戻る"
-              disabled={locating}
-              onClick={locate}
-            >
-              {locating ? <LoaderCircle size={17} className="spin" /> : <LocateFixed size={17} />}
-            </button>
-            <button type="button" aria-label="全国を表示" title="全国を表示" onClick={showJapan}>
-              <Globe2 size={17} />
-            </button>
-          </div>
         </div>
 
         {selected && (
@@ -481,88 +455,117 @@ export function App() {
         )}
 
         <div className={`map-bottom ${showZoomHint ? 'has-zoom-hint' : ''}`}>
-          <div className="legend">
-            <div className="legend-title">
-              <span>
-                {dataset === 'change'
-                  ? '対前年変動率'
-                  : mode === 'heatmap'
-                    ? '価格で重み付けした密度'
-                    : '㎡あたりの価格'}
-              </span>
-              <small>
-                {mode === 'heatmap' ? '相対値' : dataset === 'change' ? '%' : '万円 / ㎡'}
-              </small>
+          <div className="map-context">
+            <div className="legend">
+              <div className="legend-title">
+                <span>
+                  {dataset === 'change'
+                    ? '対前年変動率'
+                    : mode === 'heatmap'
+                      ? '価格で重み付けした密度'
+                      : '㎡あたりの価格'}
+                </span>
+                <small>
+                  {mode === 'heatmap' ? '相対値' : dataset === 'change' ? '%' : '万円 / ㎡'}
+                </small>
+              </div>
+              <div
+                className="legend-gradient"
+                style={{
+                  background: `linear-gradient(90deg, ${(dataset === 'change' ? CHANGE_COLORS : PRICE_COLORS).join(',')})`,
+                }}
+              />
+              <div className="legend-labels">
+                {(mode === 'heatmap'
+                  ? ['低い', '高い']
+                  : dataset === 'change'
+                    ? ['−5', '0', '2', '5', '10', '20+']
+                    : ['0', '30', '70', '150', '500', '1,500+']
+                ).map((label) => (
+                  <span key={label}>{label}</span>
+                ))}
+              </div>
+              {mode === '3d' && (
+                <p>
+                  {dataset === 'change'
+                    ? '高さは変動率の絶対値、色は増減を表します'
+                    : '高さは価格の平方根に比例（上限6,500m）'}
+                </p>
+              )}
             </div>
             <div
-              className="legend-gradient"
-              style={{
-                background: `linear-gradient(90deg, ${(dataset === 'change' ? CHANGE_COLORS : PRICE_COLORS).join(',')})`,
-              }}
-            />
-            <div className="legend-labels">
-              {(mode === 'heatmap'
-                ? ['低い', '高い']
-                : dataset === 'change'
-                  ? ['−5', '0', '2', '5', '10', '20+']
-                  : ['0', '30', '70', '150', '500', '1,500+']
-              ).map((label) => (
-                <span key={label}>{label}</span>
-              ))}
-            </div>
-            {mode === '3d' && (
-              <p>
-                {dataset === 'change'
-                  ? '高さは変動率の絶対値、色は増減を表します'
-                  : '高さは価格の平方根に比例（上限6,500m）'}
-              </p>
-            )}
-          </div>
-          <div
-            className="data-status"
-            role="status"
-            data-completed={completed}
-            data-total={data.tiles}
-            data-loading={loading}
-          >
-            {loading || (!mapRendered && !error) ? (
-              <>
-                <LoaderCircle size={14} className="spin" />
-                <span>
-                  {loading
-                    ? `国交省のデータを取得中…${data.tiles ? ` ${Math.round((completed / data.tiles) * 100)}%` : ''}${points.length ? ` / ${points.length.toLocaleString()}地点を表示中（集計途中）` : ''}`
-                    : '地図を描画中…'}
-                </span>
-              </>
-            ) : error ? (
-              <>
-                <span className="status-dot error" />
-                <span>{error}</span>
-                <button type="button" onClick={retry}>
-                  再試行
-                </button>
-              </>
-            ) : currentData?.message ? (
-              <>
-                {showZoomHint ? <ZoomIn size={26} aria-hidden="true" /> : <Info size={14} />}
-                <span>{currentData.message}</span>
-                {!currentData.zoomRequired && (
+              className="data-status"
+              role="status"
+              data-completed={completed}
+              data-total={data.tiles}
+              data-loading={loading}
+            >
+              {loading || (!mapRendered && !error) ? (
+                <>
+                  <LoaderCircle size={14} className="spin" />
+                  <span>
+                    {loading
+                      ? `国交省のデータを取得中…${data.tiles ? ` ${Math.round((completed / data.tiles) * 100)}%` : ''}${points.length ? ` / ${points.length.toLocaleString()}地点を表示中（集計途中）` : ''}`
+                      : '地図を描画中…'}
+                  </span>
+                </>
+              ) : error ? (
+                <>
+                  <span className="status-dot error" />
+                  <span>{error}</span>
                   <button type="button" onClick={retry}>
                     再試行
                   </button>
-                )}
-              </>
-            ) : (
-              <>
-                <span className="status-dot" />
-                <span>
-                  {points.length
-                    ? `${points.length.toLocaleString()}地点を表示中`
-                    : 'この範囲・年度には対象データがありません'}
-                  {dataset === 'transactions' && ` / ${rawPoints.length.toLocaleString()}件`}
-                </span>
-              </>
-            )}
+                </>
+              ) : currentData?.message ? (
+                <>
+                  {showZoomHint ? <ZoomIn size={26} aria-hidden="true" /> : <Info size={14} />}
+                  <span>{currentData.message}</span>
+                  {!currentData.zoomRequired && (
+                    <button type="button" onClick={retry}>
+                      再試行
+                    </button>
+                  )}
+                </>
+              ) : (
+                <>
+                  <span className="status-dot" />
+                  <span>
+                    {points.length
+                      ? `${points.length.toLocaleString()}地点を表示中`
+                      : 'この範囲・年度には対象データがありません'}
+                    {dataset === 'transactions' && ` / ${rawPoints.length.toLocaleString()}件`}
+                  </span>
+                </>
+              )}
+            </div>
+          </div>
+          <div className="zoom-controls">
+            <button type="button" aria-label="ズームイン" onClick={() => map?.zoomIn()}>
+              <Plus size={19} />
+            </button>
+            <button type="button" aria-label="ズームアウト" onClick={() => map?.zoomOut()}>
+              <Minus size={19} />
+            </button>
+            <button
+              type="button"
+              aria-label="北を上にする"
+              onClick={() => map?.easeTo({ bearing: 0, duration: 500 })}
+            >
+              <Compass size={19} />
+            </button>
+            <button
+              type="button"
+              aria-label="現在地に戻る"
+              title="現在地に戻る"
+              disabled={locating}
+              onClick={locate}
+            >
+              {locating ? <LoaderCircle size={17} className="spin" /> : <LocateFixed size={17} />}
+            </button>
+            <button type="button" aria-label="全国を表示" title="全国を表示" onClick={showJapan}>
+              <Globe2 size={17} />
+            </button>
           </div>
           <div className="timeline">
             <div className="timeline-label">

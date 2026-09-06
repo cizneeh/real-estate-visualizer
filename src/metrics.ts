@@ -1,7 +1,7 @@
-import type { FeatureCollection, Point, Polygon } from 'geojson'
+import type { FeatureCollection, Point } from 'geojson'
 import type { Dataset, PricePoint } from './types'
 
-export const PRICE_COLORS = ['#75ddc8', '#54c4dd', '#638fea', '#a18aee', '#ed99cf', '#ffc77b']
+export const PRICE_COLORS = ['#568faf', '#6a93cd', '#998ddd', '#c793d2', '#ea95af', '#ff877d']
 export const PRICE_STOPS = [0, 300_000, 700_000, 1_500_000, 5_000_000, 15_000_000]
 export const CHANGE_COLORS = ['#668be6', '#9cb9e9', '#a4c7c7', '#77d8bc', '#edda8e', '#ffaf75']
 export const CHANGE_STOPS = [-5, 0, 2, 5, 10, 20]
@@ -70,36 +70,8 @@ export function pointCollection(points: PricePoint[], dataset: Dataset): Feature
   }
 }
 
-export function columnCollection(
-  points: PricePoint[],
-  dataset: Dataset,
-): FeatureCollection<Polygon> {
-  return {
-    type: 'FeatureCollection',
-    features: points.map((point) => {
-      const [lng, lat] = point.coordinates
-      const radius = point.count ? 85 : 45
-      const ring: number[][] = []
-      for (let i = 0; i <= 6; i++) {
-        const angle = (i * Math.PI) / 3
-        ring.push([
-          lng + (Math.cos(angle) * radius) / (111_320 * Math.cos((lat * Math.PI) / 180)),
-          lat + (Math.sin(angle) * radius) / 111_320,
-        ])
-      }
-      return {
-        type: 'Feature',
-        id: point.id,
-        geometry: { type: 'Polygon', coordinates: [ring] },
-        properties: {
-          id: point.id,
-          color: colorFor(point, dataset),
-          height:
-            dataset === 'change'
-              ? 80 + Math.abs(point.change ?? 0) * 95
-              : Math.min(6500, Math.sqrt(point.price) * 0.9),
-        },
-      }
-    }),
-  }
+export function columnHeight(point: PricePoint, dataset: Dataset): number {
+  return dataset === 'change'
+    ? 80 + Math.abs(point.change ?? 0) * 95
+    : Math.min(6500, Math.sqrt(point.price) * 0.9)
 }
