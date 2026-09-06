@@ -27,8 +27,12 @@ export function createApp(getApiKey: () => string | undefined, store = createTil
   const app = new Hono()
   app.use('/api/*', async (c, next) => {
     const origin = c.req.header('Origin')
-    if (origin && !/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)) {
-      return c.json({ error: 'このAPIはローカルから利用してください。' }, 403)
+    if (
+      origin &&
+      origin !== new URL(c.req.url).origin &&
+      !/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)
+    ) {
+      return c.json({ error: 'このAPIはアプリと同じサイトから利用してください。' }, 403)
     }
     c.header('Cache-Control', 'no-store')
     await next()
@@ -93,10 +97,7 @@ export function createApp(getApiKey: () => string | undefined, store = createTil
     }
     const apiKey = getApiKey()
     if (!apiKey)
-      return c.json(
-        { error: '.env に REINFOLIB_API_KEY を設定してサーバーを再起動してください。' },
-        503,
-      )
+      return c.json({ error: 'サーバーの REINFOLIB_API_KEY が設定されていません。' }, 503)
     return c.json(
       await readTile(
         dataset,
@@ -146,10 +147,7 @@ export function createApp(getApiKey: () => string | undefined, store = createTil
       })
     const apiKey = getApiKey()
     if (!apiKey)
-      return c.json(
-        { error: '.env に REINFOLIB_API_KEY を設定してサーバーを再起動してください。' },
-        503,
-      )
+      return c.json({ error: 'サーバーの REINFOLIB_API_KEY が設定されていません。' }, 503)
     response.tiles = tiles.length
     const results = await Promise.allSettled(
       tiles.map((tile) => readTile(dataset, year, tile, apiKey, c.req.raw.signal)),
