@@ -35,16 +35,10 @@ import {
   PRICE_COLORS,
   priceLabel,
 } from './metrics'
-import {
-  type Bounds,
-  type DataResponse,
-  type Dataset,
-  JAPAN_BOUNDS,
-  type PricePoint,
-  type ViewMode,
-} from './types'
+import { type Bounds, type Dataset, JAPAN_BOUNDS, type PricePoint, type ViewMode } from './types'
 import { useCurrentLocation } from './useCurrentLocation'
 import { useMapTools } from './useMapTools'
+import { usePriceTiles } from './usePriceTiles'
 
 const DATASETS: { id: Dataset; name: string; description: string; icon: typeof MapPin }[] = [
   { id: 'land', name: '公示地価', description: '1月1日時点の土地の価格', icon: Layers3 },
@@ -66,10 +60,7 @@ export function App() {
   const [mode, setMode] = useState<ViewMode>('3d')
   const [category, setCategory] = useState('すべて')
   const [bounds, setBounds] = useState<Bounds>()
-  const [data, setData] = useState<DataResponse>()
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string>()
-  const [retry, setRetry] = useState(0)
+  const { data, loading, error, completed, retry } = usePriceTiles(bounds, dataset, year)
   const [map, setMap] = useState<LibreMap>()
   const [mapRendered, setMapRendered] = useState(false)
   const [selectedId, setSelectedId] = useState<string>()
@@ -89,37 +80,8 @@ export function App() {
   }, [position])
 
   useEffect(() => {
-    if (!bounds) return
-    const abort = new AbortController()
-    setLoading(true)
-    setError(undefined)
-    const timer = window.setTimeout(async () => {
-      try {
-        const query = new URLSearchParams({
-          dataset,
-          year: String(year),
-          bounds: bounds.join(','),
-          retry: String(retry),
-        })
-        const response = await fetch(`/api/data?${query}`, { signal: abort.signal })
-        const result = await response.json()
-        if (!response.ok) throw new Error(result.error ?? 'データの取得に失敗しました。')
-        if (!abort.signal.aborted) setData(result)
-      } catch (cause) {
-        if (!abort.signal.aborted) {
-          setError(cause instanceof Error ? cause.message : 'データの取得に失敗しました。')
-          setData(undefined)
-          setPlaying(false)
-        }
-      } finally {
-        if (!abort.signal.aborted) setLoading(false)
-      }
-    }, 400)
-    return () => {
-      window.clearTimeout(timer)
-      abort.abort()
-    }
-  }, [bounds, dataset, year, retry])
+    if (error) setPlaying(false)
+  }, [error])
 
   useEffect(() => {
     if (!playing || loading || !mapRendered || error) return
@@ -259,7 +221,11 @@ export function App() {
               <h3 id="summary-title">
                 {dataset === 'transactions' ? '駅別中央値の中央値' : '表示範囲の中央値'}
               </h3>
-              <span>{loading ? '更新中' : `${points.length.toLocaleString()}地点`}</span>
+              <span>
+                {loading
+                  ? `${points.length.toLocaleString()}地点・取得途中`
+                  : `${points.length.toLocaleString()}地点`}
+              </span>
             </div>
             <div className="big-metric">
               {dataset === 'change' ? changeLabel(medianChange) : priceLabel(midpoint)}
@@ -550,17 +516,27 @@ export function App() {
               </p>
             )}
           </div>
-          <div className="data-status" role="status">
+          <div
+            className="data-status"
+            role="status"
+            data-completed={completed}
+            data-total={data.tiles}
+            data-loading={loading}
+          >
             {loading || (!mapRendered && !error) ? (
               <>
                 <LoaderCircle size={14} className="spin" />
-                <span>{loading ? '国交省のデータを取得中…' : '地図を描画中…'}</span>
+                <span>
+                  {loading
+                    ? `国交省のデータを取得中…${data.tiles ? ` ${Math.round((completed / data.tiles) * 100)}%` : ''}${points.length ? ` / ${points.length.toLocaleString()}地点を表示中（集計途中）` : ''}`
+                    : '地図を描画中…'}
+                </span>
               </>
             ) : error ? (
               <>
                 <span className="status-dot error" />
                 <span>{error}</span>
-                <button type="button" onClick={() => setRetry((value) => value + 1)}>
+                <button type="button" onClick={retry}>
                   再試行
                 </button>
               </>
@@ -569,7 +545,7 @@ export function App() {
                 <Info size={14} />
                 <span>{currentData.message}</span>
                 {!currentData.zoomRequired && (
-                  <button type="button" onClick={() => setRetry((value) => value + 1)}>
+                  <button type="button" onClick={retry}>
                     再試行
                   </button>
                 )}
@@ -649,7 +625,7 @@ export function App() {
           国土交通省「不動産情報ライブラリ」の実データを、全国で表示しています。地図の移動や年度の変更に合わせて取得します。広域表示では、見たい地域を拡大してください。
         </p>
         <p>
-          位置情報を許可すると、最初に現在地の周辺を表示します。取得できない場合は日本全体から探索できます。現在地ボタンで再取得でき、位置情報は保存しません。
+          最初に東京駅周辺を表示し、位置情報を取得できた場合は現在地の周辺へ移動します。取得待ちや取得できない場合も東京周辺から探索できます。現在地ボタンで再取得でき、位置情報は保存しません。
         </p>
         <h3>価格の読み方</h3>
         <p>

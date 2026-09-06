@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import { mkdir } from 'node:fs/promises'
 import { chromium, expect } from '@playwright/test'
+import { tileAt, tileKey } from '../src/tiles'
 
 const browser = await chromium.launch({ channel: 'chrome', headless: true })
 const context = await browser.newContext({
@@ -12,12 +13,12 @@ const context = await browser.newContext({
 const page = await context.newPage()
 page.setDefaultTimeout(15_000)
 const errors: string[] = []
-const requestedBounds: number[][] = []
+const requestedTiles: string[] = []
 page.on('pageerror', (error) => errors.push(error.message))
 page.on('request', (request) => {
   const url = new URL(request.url())
-  if (url.pathname === '/api/data')
-    requestedBounds.push((url.searchParams.get('bounds') ?? '').split(',').map(Number))
+  if (url.pathname.startsWith('/api/tiles/'))
+    requestedTiles.push(url.pathname.slice('/api/tiles/'.length))
 })
 const destination = 'tmp/screenshots'
 await mkdir(destination, { recursive: true })
@@ -35,12 +36,7 @@ async function ready() {
 }
 
 function expectLocation(longitude: number, latitude: number) {
-  const bounds = requestedBounds.at(-1)
-  assert.ok(bounds)
-  assert.ok(bounds[0] < longitude && longitude < bounds[2])
-  assert.ok(bounds[1] < latitude && latitude < bounds[3])
-  assert.ok(bounds[2] - bounds[0] < 0.5)
-  assert.ok(bounds[3] - bounds[1] < 0.5)
+  assert.ok(requestedTiles.includes(tileKey(tileAt([longitude, latitude]))))
 }
 
 try {
@@ -109,7 +105,7 @@ try {
   await page.screenshot({ path: `${destination}/transactions.png`, fullPage: true })
   console.log('PASS: land survey, heatmap, actual condominium transaction data')
 
-  await page.route('**/api/data?*', (route) =>
+  await page.route('**/api/tiles/**', (route) =>
     route.fulfill({
       status: 502,
       json: { error: '接続エラーの表示テスト' },
@@ -117,11 +113,11 @@ try {
   )
   await page.getByRole('button', { name: '2023年を表示' }).click()
   await expect(page.getByRole('status')).toContainText('接続エラーの表示テスト')
-  await page.unroute('**/api/data?*')
+  await page.unroute('**/api/tiles/**')
   await page.getByRole('button', { name: '再試行', exact: true }).click()
   await ready()
 
-  await page.route('**/api/data?*', (route) =>
+  await page.route('**/api/tiles/**', (route) =>
     route.fulfill({
       json: {
         points: [],
@@ -136,7 +132,7 @@ try {
   await page.getByRole('button', { name: '2022年を表示' }).click()
   await expect(page.getByRole('status')).toContainText('対象データがありません')
   await expect(page.locator('.big-metric')).toContainText('—')
-  await page.unroute('**/api/data?*')
+  await page.unroute('**/api/tiles/**')
   await page.getByRole('button', { name: '2023年を表示' }).click()
   await ready()
   await page.getByRole('button', { name: '年度を自動再生', exact: true }).click()
@@ -172,9 +168,16 @@ try {
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false)
   console.log('PASS: information dialog, mobile controls, no horizontal overflow or JS errors')
 
-  for (const failure of ['denied', 'unavailable', 'timeout', 'unsupported', 'outside'] as const) {
+  for (const failure of [
+    'denied',
+    'unavailable',
+    'timeout',
+    'unsupported',
+    'outside',
+    'pending',
+  ] as const) {
     const fallback = await browser.newContext({
-      viewport: { width: 390, height: 844 },
+      viewport: failure === 'denied' ? { width: 1512, height: 982 } : { width: 390, height: 844 },
       ...(failure === 'outside'
         ? {
             permissions: ['geolocation'],
@@ -184,6 +187,12 @@ try {
     })
     const fallbackPage = await fallback.newPage()
     fallbackPage.on('pageerror', (error) => errors.push(error.message))
+    const fallbackTiles: string[] = []
+    fallbackPage.on('request', (request) => {
+      const url = new URL(request.url())
+      if (url.pathname.startsWith('/api/tiles/'))
+        fallbackTiles.push(url.pathname.slice('/api/tiles/'.length))
+    })
     if (failure === 'denied') {
       const cdp = await fallback.newCDPSession(fallbackPage)
       await cdp.send('Browser.setPermission', {
@@ -199,7 +208,19 @@ try {
             reason === 'unsupported'
               ? undefined
               : {
-                  getCurrentPosition(_success: PositionCallback, fail: PositionErrorCallback) {
+                  getCurrentPosition(success: PositionCallback, fail: PositionErrorCallback) {
+                    if (reason === 'pending') {
+                      window.addEventListener(
+                        'resolve-test-geolocation',
+                        () => {
+                          success({
+                            coords: { longitude: 135.5023, latitude: 34.6937 },
+                          } as GeolocationPosition)
+                        },
+                        { once: true },
+                      )
+                      return
+                    }
                     fail({ code: reason === 'timeout' ? 3 : 2 } as GeolocationPositionError)
                   },
                 },
@@ -208,16 +229,25 @@ try {
     }
     await fallbackPage.goto(process.env.APP_URL ?? 'http://127.0.0.1:5187/')
     await expect(fallbackPage.locator('.location-notice')).toContainText(
-      failure === 'denied'
-        ? '位置情報が許可されていません'
-        : failure === 'outside'
-          ? '現在地は地図の表示範囲外'
-          : '現在地を取得できません',
+      failure === 'pending'
+        ? '現在地を取得中'
+        : failure === 'denied'
+          ? '位置情報が許可されていません'
+          : failure === 'outside'
+            ? '現在地は地図の表示範囲外'
+            : '現在地を取得できません',
     )
-    await expect(fallbackPage.getByRole('status')).toContainText('見たい地域を拡大すると', {
+    await expect(fallbackPage.getByRole('status')).toHaveAttribute('data-loading', 'false', {
+      timeout: 60_000,
+    })
+    await expect(fallbackPage.getByRole('status')).toContainText('地点を表示中', {
       timeout: 30_000,
     })
-    await expect(fallbackPage.getByRole('button', { name: '現在地に戻る' })).toBeEnabled()
+    await expect(fallbackPage.locator('.map-canvas')).toHaveAttribute('data-rendered', 'true')
+    assert.ok(fallbackTiles.includes(tileKey(tileAt([139.7671, 35.6812]))))
+    await expect(fallbackPage.getByRole('img', { name: '現在地', exact: true })).toHaveCount(0)
+    if (failure !== 'pending')
+      await expect(fallbackPage.getByRole('button', { name: '現在地に戻る' })).toBeEnabled()
     await fallbackPage.screenshot({
       path: `${destination}/location-${failure}.png`,
       fullPage: true,
@@ -226,8 +256,20 @@ try {
       await fallbackPage.evaluate(() => document.documentElement.scrollWidth > innerWidth),
       false,
     )
+    if (failure === 'pending') {
+      await fallbackPage.evaluate(() => window.dispatchEvent(new Event('resolve-test-geolocation')))
+      await expect(fallbackPage.getByRole('img', { name: '現在地', exact: true })).toBeVisible()
+      await expect
+        .poll(() => fallbackTiles.includes(tileKey(tileAt([135.5023, 34.6937]))))
+        .toBe(true)
+      await expect(fallbackPage.getByRole('status')).toHaveAttribute('data-loading', 'false')
+      await expect(fallbackPage.getByRole('status')).toContainText('地点を表示中')
+      await expect(fallbackPage.locator('.location-notice')).toHaveCount(0)
+    }
     await fallback.close()
-    console.log(`PASS: geolocation ${failure} falls back to Japan with usable controls`)
+    console.log(
+      `PASS: geolocation ${failure} shows Tokyo prices${failure === 'pending' ? ' before moving to the resolved location' : ' with usable controls'}`,
+    )
   }
   assert.deepEqual(errors, [])
 } catch (error) {

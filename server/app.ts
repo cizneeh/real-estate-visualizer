@@ -1,25 +1,29 @@
-import { createHash } from 'node:crypto'
-import { mkdir, readFile, writeFile } from 'node:fs/promises'
-import { setTimeout as delay } from 'node:timers/promises'
-import type { Feature, FeatureCollection } from 'geojson'
 import { Hono } from 'hono'
-import type { Bounds, DataResponse, Dataset } from '../src/types'
-import { clipBounds, inBounds, normalizePoint, tilesForBounds } from './data'
+import {
+  clipBounds,
+  DATA_ZOOM,
+  inBounds,
+  type Tile,
+  tileAt,
+  tileBounds,
+  tileKey,
+  tilesForBounds,
+} from '../src/tiles'
+import type { Bounds, DataResponse, Dataset, PricePoint, TileResponse } from '../src/types'
+import { normalizePoint } from './data'
+import { createTileStore, UpstreamError } from './tileStore'
 
 const BASE_URL = 'https://www.reinfolib.mlit.go.jp/ex-api/external/'
-const CACHE_TTL = 24 * 60 * 60 * 1000
-const pending = new Map<string, Promise<Feature[]>>()
-const memory = new Map<string, { at: number; features: Feature[] }>()
-let queue: Promise<unknown> = Promise.resolve()
-let upstreamBackoff: { until: number; status: number } | undefined
 
-class UpstreamError extends Error {
-  constructor(public status: number) {
-    super('Upstream request failed')
-  }
+function validDataset(value: string): value is Dataset {
+  return ['land', 'survey', 'change', 'transactions'].includes(value)
 }
 
-export function createApp(getApiKey: () => string | undefined) {
+function validYear(value: number) {
+  return Number.isInteger(value) && value >= 2020 && value <= new Date().getFullYear()
+}
+
+export function createApp(getApiKey: () => string | undefined, store = createTileStore()) {
   const app = new Hono()
   app.use('/api/*', async (c, next) => {
     const origin = c.req.header('Origin')
@@ -30,15 +34,88 @@ export function createApp(getApiKey: () => string | undefined) {
     await next()
   })
   app.get('/api/health', (c) => c.json({ configured: Boolean(getApiKey()) }))
+  async function readTile(
+    dataset: Dataset,
+    year: number,
+    tile: Tile,
+    apiKey: string,
+    signal: AbortSignal,
+    priority = 0,
+  ): Promise<TileResponse> {
+    const params = new URLSearchParams({
+      response_format: 'geojson',
+      z: String(tile.z),
+      x: String(tile.x),
+      y: String(tile.y),
+    })
+    if (dataset === 'transactions') {
+      params.set('from', `${year}1`)
+      params.set('to', `${year}4`)
+      params.set('priceClassification', '01')
+      params.set('landTypeCode', '07')
+    } else {
+      params.set('year', String(year))
+      params.set('priceClassification', dataset === 'survey' ? '1' : '0')
+    }
+    const url = `${BASE_URL}${dataset === 'transactions' ? 'XPT001' : 'XPT002'}?${params}`
+    const entry = await store.get(url, apiKey, signal, priority)
+    const points = new Map<string, PricePoint>()
+    entry.features.forEach((feature, index) => {
+      const point = normalizePoint(feature, dataset, `${tileKey(tile)}/${index}`)
+      if (point && tileKey(tileAt(point.coordinates, tile.z)) === tileKey(tile))
+        points.set(point.id, point)
+    })
+    return { points: [...points.values()], fetchedAt: new Date(entry.at).toISOString() }
+  }
+
+  app.get('/api/tiles/:z/:x/:y', async (c) => {
+    const dataset = c.req.query('dataset') ?? 'land'
+    const year = Number(c.req.query('year') ?? 2025)
+    const tile = {
+      z: Number(c.req.param('z')),
+      x: Number(c.req.param('x')),
+      y: Number(c.req.param('y')),
+    }
+    const priority = c.req.query('priority') ?? 'visible'
+    if (
+      !validDataset(dataset) ||
+      !validYear(year) ||
+      tile.z !== DATA_ZOOM ||
+      ![tile.x, tile.y].every(
+        (value) => Number.isInteger(value) && value >= 0 && value < 2 ** tile.z,
+      ) ||
+      !['visible', 'background'].includes(priority)
+    ) {
+      return c.json({ error: 'タイル・年度・データの指定を確認してください。' }, 400)
+    }
+    if (!clipBounds(tileBounds(tile))) {
+      return c.json({ error: '日本周辺のタイルを指定してください。' }, 400)
+    }
+    const apiKey = getApiKey()
+    if (!apiKey)
+      return c.json(
+        { error: '.env に REINFOLIB_API_KEY を設定してサーバーを再起動してください。' },
+        503,
+      )
+    return c.json(
+      await readTile(
+        dataset,
+        year,
+        tile,
+        apiKey,
+        c.req.raw.signal,
+        priority === 'background' ? 1 : 0,
+      ),
+    )
+  })
+
   app.get('/api/data', async (c) => {
     const dataset = c.req.query('dataset') ?? 'land'
     const year = Number(c.req.query('year') ?? 2025)
     const bounds = (c.req.query('bounds') ?? '').split(',').map(Number)
     if (
-      !['land', 'survey', 'change', 'transactions'].includes(dataset) ||
-      !Number.isInteger(year) ||
-      year < 2020 ||
-      year > new Date().getFullYear() ||
+      !validDataset(dataset) ||
+      !validYear(year) ||
       bounds.length !== 4 ||
       !bounds.every(Number.isFinite) ||
       bounds[0] >= bounds[2] ||
@@ -75,36 +152,18 @@ export function createApp(getApiKey: () => string | undefined) {
       )
     response.tiles = tiles.length
     const results = await Promise.allSettled(
-      tiles.map(async (tile) => {
-        if (c.req.raw.signal.aborted) throw new UpstreamError(499)
-        const params = new URLSearchParams({
-          response_format: 'geojson',
-          ...Object.fromEntries(Object.entries(tile).map(([k, v]) => [k, String(v)])),
-        })
-        if (dataset === 'transactions') {
-          params.set('from', `${year}1`)
-          params.set('to', `${year}4`)
-          params.set('priceClassification', '01')
-          params.set('landTypeCode', '07')
-        } else {
-          params.set('year', String(year))
-          params.set('priceClassification', dataset === 'survey' ? '1' : '0')
-        }
-        const url = `${BASE_URL}${dataset === 'transactions' ? 'XPT001' : 'XPT002'}?${params}`
-        return await fetchTile(url, apiKey, c.req.raw.signal)
-      }),
+      tiles.map((tile) => readTile(dataset, year, tile, apiKey, c.req.raw.signal)),
     )
     let upstreamStatus: number | undefined
     const unique = new Map<string, ReturnType<typeof normalizePoint>>()
-    results.forEach((result, tileIndex) => {
+    results.forEach((result) => {
       if (result.status === 'rejected') {
         response.failedTiles++
         if (result.reason instanceof UpstreamError) upstreamStatus = result.reason.status
         return
       }
-      result.value.forEach((feature, index) => {
-        const point = normalizePoint(feature, dataset as Dataset, tileIndex * 1_000_000 + index)
-        if (point && inBounds(point.coordinates, clipped)) unique.set(point.id, point)
+      result.value.points.forEach((point) => {
+        if (inBounds(point.coordinates, clipped)) unique.set(point.id, point)
       })
     })
     if (upstreamStatus === 401 || upstreamStatus === 403) {
@@ -129,76 +188,13 @@ export function createApp(getApiKey: () => string | undefined) {
       response.message = `一部の地域を取得できませんでした（${response.failedTiles}/${tiles.length}タイル）。集計は取得済みの地点のみです。`
     return c.json(response)
   })
-  app.onError((_error, c) =>
-    c.json({ error: 'サーバーでエラーが発生しました。再読み込みしてください。' }, 500),
-  )
+  app.onError((error, c) => {
+    if (error instanceof UpstreamError) {
+      if (error.retryAfter) c.header('Retry-After', String(Math.ceil(error.retryAfter)))
+      return c.json({ error: error.message, upstreamStatus: error.status }, 502)
+    }
+    if (error.name === 'AbortError') return new Response(undefined, { status: 499 })
+    return c.json({ error: 'サーバーでエラーが発生しました。再読み込みしてください。' }, 500)
+  })
   return app
-}
-
-async function fetchTile(url: string, apiKey: string, signal: AbortSignal): Promise<Feature[]> {
-  const cacheKey = createHash('sha256').update(url).digest('hex')
-  const cached = memory.get(cacheKey)
-  if (cached && Date.now() - cached.at < CACHE_TTL) return cached.features
-  const running = pending.get(cacheKey)
-  if (running) {
-    try {
-      return await running
-    } catch (error) {
-      if (error instanceof UpstreamError && error.status === 499 && !signal.aborted) {
-        return fetchTile(url, apiKey, signal)
-      }
-      throw error
-    }
-  }
-  const request = (async () => {
-    const file = `.cache/tiles/${cacheKey}.json`
-    try {
-      const disk = JSON.parse(await readFile(file, 'utf8')) as { at: number; features: Feature[] }
-      if (Date.now() - disk.at < CACHE_TTL && Array.isArray(disk.features)) {
-        memory.set(cacheKey, disk)
-        return disk.features
-      }
-    } catch {
-      /* A cache miss is normal; request the public dataset from the API. */
-    }
-    const turn = queue.then(async () => {
-      if (signal.aborted) throw new UpstreamError(499)
-      if (upstreamBackoff && Date.now() < upstreamBackoff.until) {
-        throw new UpstreamError(upstreamBackoff.status)
-      }
-      await delay(200)
-      let data: FeatureCollection | Feature[]
-      try {
-        const res = await fetch(url, {
-          headers: { 'Ocp-Apim-Subscription-Key': apiKey },
-          signal: AbortSignal.timeout(15_000),
-        })
-        if (!res.ok) throw new UpstreamError(res.status)
-        data = await res.json()
-      } catch (error) {
-        const status = error instanceof UpstreamError ? error.status : 504
-        upstreamBackoff = { until: Date.now() + (status === 429 ? 30_000 : 5_000), status }
-        throw new UpstreamError(status)
-      }
-      const features = Array.isArray(data) ? data : data.features
-      if (!Array.isArray(features)) throw new UpstreamError(502)
-      const entry = { at: Date.now(), features }
-      memory.set(cacheKey, entry)
-      if (memory.size > 300) {
-        const oldest = memory.keys().next().value
-        if (oldest) memory.delete(oldest)
-      }
-      await mkdir('.cache/tiles', { recursive: true })
-      await writeFile(file, JSON.stringify(entry))
-      return features
-    })
-    queue = turn.catch(() => undefined)
-    return turn
-  })()
-  pending.set(cacheKey, request)
-  try {
-    return await request
-  } finally {
-    pending.delete(cacheKey)
-  }
 }
