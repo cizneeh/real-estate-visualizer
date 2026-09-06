@@ -1,4 +1,47 @@
-import type { Map as LibreMap } from 'maplibre-gl'
+import type { FeatureCollection, Point } from 'geojson'
+import type { ExpressionSpecification, Map as LibreMap } from 'maplibre-gl'
+import { MAJOR_STATIONS } from './majorStations'
+
+const STATION_LABEL: ExpressionSpecification = [
+  'let',
+  'stationName',
+  ['coalesce', ['get', 'name:ja'], ['get', 'name'], ''],
+  [
+    'case',
+    ['==', ['var', 'stationName'], ''],
+    '',
+    ['==', ['slice', ['var', 'stationName'], -1], '駅'],
+    ['var', 'stationName'],
+    ['concat', ['var', 'stationName'], '駅'],
+  ],
+]
+
+const MAJOR_STATION_DATA: FeatureCollection<Point> = {
+  type: 'FeatureCollection',
+  features: MAJOR_STATIONS.map(([name, longitude, latitude, priority]) => ({
+    type: 'Feature',
+    properties: { name, priority },
+    geometry: { type: 'Point', coordinates: [longitude, latitude] },
+  })),
+}
+
+const STATION_PRIORITY: ExpressionSpecification = [
+  'match',
+  ['get', 'name'],
+  MAJOR_STATIONS.filter((station) => station[3] === 0).map(([name]) => name),
+  0,
+  MAJOR_STATIONS.filter((station) => station[3] === 1).map(([name]) => name),
+  100,
+  MAJOR_STATIONS.filter((station) => station[3] === 2).map(([name]) => name),
+  200,
+  500,
+]
+
+const IS_MAJOR_STATION: ExpressionSpecification = [
+  'in',
+  ['get', 'name'],
+  ['literal', MAJOR_STATIONS.map(([name]) => name)],
+]
 
 const FILL_COLORS: Record<string, string> = {
   water: '#091321',
@@ -60,4 +103,70 @@ export function configureBasemap(map: LibreMap) {
       map.setPaintProperty(layer.id, 'text-halo-blur', 0.5)
     }
   }
+
+  map.addLayer({
+    id: 'station-labels',
+    type: 'symbol',
+    source: 'openmaptiles',
+    'source-layer': 'poi',
+    minzoom: 12,
+    filter: ['==', ['get', 'class'], 'railway'],
+    layout: {
+      'text-field': STATION_LABEL,
+      'text-font': ['Noto Sans Regular'],
+      'text-size': [
+        'interpolate',
+        ['linear'],
+        ['zoom'],
+        12,
+        ['case', IS_MAJOR_STATION, 14, 12],
+        15,
+        ['case', IS_MAJOR_STATION, 16, 14],
+        17,
+        ['case', IS_MAJOR_STATION, 18, 16],
+      ],
+      'text-padding': 5,
+      'text-offset': [0, 0.6],
+      'symbol-sort-key': ['+', STATION_PRIORITY, ['coalesce', ['get', 'rank'], 0]],
+    },
+    paint: {
+      'text-color': '#c4e9f4',
+      'text-halo-color': '#233441',
+      'text-halo-width': 1.8,
+      'text-halo-blur': 0.5,
+    },
+  })
+
+  map.addSource('major-stations', { type: 'geojson', data: MAJOR_STATION_DATA })
+  map.addLayer({
+    id: 'major-station-labels',
+    type: 'symbol',
+    source: 'major-stations',
+    minzoom: 8,
+    maxzoom: 12,
+    filter: [
+      'step',
+      ['zoom'],
+      ['<=', ['get', 'priority'], 0],
+      9,
+      ['<=', ['get', 'priority'], 1],
+      10,
+      true,
+    ],
+    layout: {
+      'text-field': STATION_LABEL,
+      'text-font': ['Noto Sans Regular'],
+      'text-size': ['interpolate', ['linear'], ['zoom'], 8, 12, 10, 13, 12, 14],
+      'text-padding': 3,
+      'text-variable-anchor': ['bottom', 'top', 'left', 'right'],
+      'text-radial-offset': 0.5,
+      'symbol-sort-key': ['get', 'priority'],
+    },
+    paint: {
+      'text-color': '#c4e9f4',
+      'text-halo-color': '#233441',
+      'text-halo-width': 1.8,
+      'text-halo-blur': 0.5,
+    },
+  })
 }

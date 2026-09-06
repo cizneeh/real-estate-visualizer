@@ -73,7 +73,6 @@ export function MapCanvas(props: Props) {
       ])
     }
     map.on('load', () => {
-      configureBasemap(map)
       map.addSource('prices', { type: 'geojson', data: pointCollection([], 'land') })
       map.addLayer({
         id: 'price-heat',
@@ -130,9 +129,10 @@ export function MapCanvas(props: Props) {
       const columns = new PriceColumnLayer()
       columnsRef.current = columns
       map.addLayer(columns)
+      configureBasemap(map)
       map.on('webglcontextrestored', () => {
         map.once('style.load', () => {
-          if (!map.getLayer(columns.id)) map.addLayer(columns)
+          if (!map.getLayer(columns.id)) map.addLayer(columns, 'station-labels')
           columns.setData(latest.current.points, latest.current.dataset)
           columns.setVisible(latest.current.mode === '3d')
           columns.setSelected(latest.current.selectedId)
