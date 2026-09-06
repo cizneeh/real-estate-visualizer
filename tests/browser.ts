@@ -44,7 +44,7 @@ function expectLocation(longitude: number, latitude: number) {
 }
 
 try {
-  await page.goto(process.env.APP_URL ?? 'http://127.0.0.1:5173/')
+  await page.goto(process.env.APP_URL ?? 'http://127.0.0.1:5187/')
   await ready()
   expectLocation(135.5023, 34.6937)
   await expect(page.getByRole('img', { name: '現在地', exact: true })).toBeVisible()
@@ -189,7 +189,7 @@ try {
       await cdp.send('Browser.setPermission', {
         permission: { name: 'geolocation' },
         setting: 'denied',
-        origin: new URL(process.env.APP_URL ?? 'http://127.0.0.1:5173/').origin,
+        origin: new URL(process.env.APP_URL ?? 'http://127.0.0.1:5187/').origin,
       })
     } else if (failure !== 'outside') {
       await fallback.addInitScript((reason) => {
@@ -206,7 +206,7 @@ try {
         })
       }, failure)
     }
-    await fallbackPage.goto(process.env.APP_URL ?? 'http://127.0.0.1:5173/')
+    await fallbackPage.goto(process.env.APP_URL ?? 'http://127.0.0.1:5187/')
     await expect(fallbackPage.locator('.location-notice')).toContainText(
       failure === 'denied'
         ? '位置情報が許可されていません'
