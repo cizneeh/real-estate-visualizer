@@ -22,6 +22,7 @@ import {
   Sparkles,
   TrendingUp,
   X,
+  ZoomIn,
 } from 'lucide-react'
 import type { Map as LibreMap } from 'maplibre-gl'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
@@ -93,6 +94,7 @@ export function App() {
   }, [playing, loading, mapRendered, error])
 
   const currentData = data?.dataset === dataset && data.year === year ? data : undefined
+  const showZoomHint = currentData?.zoomRequired && !loading && mapRendered && !error
   const rawPoints = currentData?.points ?? EMPTY_POINTS
   const points = useMemo(() => {
     if (dataset === 'transactions') return groupTransactions(rawPoints)
@@ -160,7 +162,6 @@ export function App() {
           <section className="dataset-section" aria-labelledby="dataset-title">
             <div className="section-heading">
               <h3 id="dataset-title">表示するデータ</h3>
-              <span>01 — 04</span>
             </div>
             <div className="dataset-list">
               {DATASETS.map(({ id, name, description, icon: Icon }) => (
@@ -251,9 +252,10 @@ export function App() {
           <section className="ranking" aria-labelledby="ranking-title">
             <div className="section-heading">
               <h3 id="ranking-title">
-                {dataset === 'change' ? '上昇率の高い地点' : '価格の高い地点'}
+                {dataset === 'change'
+                  ? '表示領域の中で上昇率の高い地点'
+                  : '表示領域の中で価格の高い地点'}
               </h3>
-              <span>IN VIEW</span>
             </div>
             {ranking.length ? (
               ranking.map((point, i) => (
@@ -478,7 +480,7 @@ export function App() {
           </aside>
         )}
 
-        <div className="map-bottom">
+        <div className={`map-bottom ${showZoomHint ? 'has-zoom-hint' : ''}`}>
           <div className="legend">
             <div className="legend-title">
               <span>
@@ -542,7 +544,7 @@ export function App() {
               </>
             ) : currentData?.message ? (
               <>
-                <Info size={14} />
+                {showZoomHint ? <ZoomIn size={26} aria-hidden="true" /> : <Info size={14} />}
                 <span>{currentData.message}</span>
                 {!currentData.zoomRequired && (
                   <button type="button" onClick={retry}>
