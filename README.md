@@ -1,6 +1,8 @@
 # 街の値段
 
-国土交通省「不動産情報ライブラリ」のデータを、地図・3D・ヒートマップで探索するローカルWebアプリです。全国を対象にしています。初期表示は東京駅周辺です。位置情報を取得できた場合は現在地の周辺へ移動します。
+国土交通省「不動産情報ライブラリ」のデータを、地図・3D・ヒートマップで探索するWebアプリです。全国を対象にしています。初期表示は東京駅周辺です。位置情報を取得できた場合は現在地の周辺へ移動します。
+
+公開先: [real-estate-visualize.echizen.me](https://real-estate-visualize.echizen.me)
 
 ## 起動
 
@@ -72,7 +74,24 @@ React + TypeScript + Vite / TanStack Query / Hono + Node.js / MapLibre GL JS 6 /
 
 MapLibre 6のWorkerはViteの`?worker&url`で独立したファイルにバンドルします。本番ビルドでも地図を描画できる構成です。
 
-背景地図はOpenFreeMapを利用し、日本語ラベルで表示します。ダークスタイルをベースに、陸地・水域・道路・建物・地名を識別しやすい配色に調整しています。背景地図・フォントと国交省APIへのネットワーク接続が必要です。サーバーはローカルホストに限定しています。一般公開時の認証・利用者ごとの制限はこのローカル版には含めていません。
+背景地図はOpenFreeMapを利用し、日本語ラベルで表示します。ダークスタイルをベースに、陸地・水域・道路・建物・地名を識別しやすい配色に調整しています。背景地図・フォントと国交省APIへのネットワーク接続が必要です。Node.jsの開発サーバーはローカルホストに限定しています。Workersでは同じドメインに画面とAPIを公開します。利用者認証はありません。
+
+## Cloudflareへの公開
+
+`main`に取り込まれたコミットをビルドし、Cloudflare Workersに公開します。画面はStatic Assets、`/api/*`はHonoが処理します。
+
+```sh
+npm ci
+npx wrangler login
+npx wrangler secret put REINFOLIB_API_KEY
+npm run deploy
+```
+
+APIキーはCloudflareのSecretに保存します。ブラウザのビルドやGitには含めません。独自ドメイン・アカウント・Worker名は`wrangler.jsonc`で管理します。`npm run build`でWorkers用の環境変数の型も生成します。
+
+本番相当のローカル確認には、`.dev.vars`に`REINFOLIB_API_KEY`を設定して`npm run cf:dev`を実行し、http://127.0.0.1:8790 を開きます。設定とバンドルだけを確認する場合は、ビルド後に`npx wrangler deploy --dry-run`を実行します。
+
+上のファイルキャッシュと取得中リクエストの共有はNode.jsでの動作です。Workersはファイルキャッシュを使わず、Cache APIに正常なタイルを一時保存します。キャッシュはデータセンターごとで、取得数・開始間隔・エラー後の待機の制御はisolate内です。異なるリクエスト間で取得中のPromiseは共有しません。ブラウザでの段階表示・先読み・キャッシュは共通です。D1への永続保存は未導入です。理由は[ADR 0004](adr/0004-cloudflare-deployment.md)に記録しています。
 
 対応ブラウザではWebMCPの`read_visible_prices`から表示中のデータを読み出せます。非対応ブラウザでは通常のUIだけで利用できます。
 今回の検証環境のChromeにはWebMCP APIがないため、ネイティブのツール登録・実行は未検証です。

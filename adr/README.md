@@ -4,10 +4,11 @@
 
 | ADR | 状態 |
 | --- | --- |
-| [タイル単位で価格データを取得し、ブラウザとサーバーでキャッシュする](0001-tile-loading-and-cache.md) | 採用 |
-| [取得を制限付きで並列化し、表示範囲を先読みより優先する](0002-request-scheduling-and-prefetch.md) | 採用 |
+| [タイル単位で価格データを取得し、ブラウザとサーバーでキャッシュする](0001-tile-loading-and-cache.md) | 一部置換済み（0004） |
+| [取得を制限付きで並列化し、表示範囲を先読みより優先する](0002-request-scheduling-and-prefetch.md) | 一部置換済み（0004） |
 | [位置情報の取得に依存せず、東京周辺から探索を始められるようにする](0003-location-independent-initial-view.md) | 採用 |
-| [価格の棒を専用の3D描画レイヤーで表示する](0004-animated-price-columns.md) | 採用 |
+| [現行の地図をCloudflare Workersで公開する](0004-cloudflare-deployment.md) | 採用 |
+| [価格の棒を専用の3D描画レイヤーで表示する](0005-animated-price-columns.md) | 採用 |
 
 ## 記録する内容
 
