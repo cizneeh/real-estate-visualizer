@@ -130,7 +130,7 @@ export function MapCanvas(props: Props) {
         paint: {
           'fill-extrusion-color': ['get', 'color'],
           'fill-extrusion-height': ['get', 'height'],
-          'fill-extrusion-opacity': 0.86,
+          'fill-extrusion-opacity': 1,
           'fill-extrusion-base': 0,
         },
       })

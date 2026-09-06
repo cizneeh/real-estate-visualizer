@@ -6,14 +6,26 @@ export function useCurrentLocation() {
   const [locating, setLocating] = useState(true)
   const [error, setError] = useState<string>()
   const requestId = useRef(0)
+  const errorTimer = useRef<number | undefined>(undefined)
+
+  const showError = useCallback((message: string) => {
+    window.clearTimeout(errorTimer.current)
+    setError(message)
+    errorTimer.current = window.setTimeout(() => {
+      setError(undefined)
+      errorTimer.current = undefined
+    }, 5000)
+  }, [])
 
   const locate = useCallback(() => {
     const id = ++requestId.current
+    window.clearTimeout(errorTimer.current)
+    errorTimer.current = undefined
     setLocating(true)
     setError(undefined)
     if (!navigator.geolocation) {
       setLocating(false)
-      setError('このブラウザでは現在地を取得できません。地図から地域を選んでください。')
+      showError('このブラウザでは現在地を取得できません。地図から地域を選んでください。')
       return
     }
     navigator.geolocation.getCurrentPosition(
@@ -27,14 +39,14 @@ export function useCurrentLocation() {
           coords.latitude > JAPAN_BOUNDS[3]
         ) {
           setPosition(undefined)
-          setError('現在地は地図の表示範囲外です。日本国内の地域を選んでください。')
+          showError('現在地は地図の表示範囲外です。日本国内の地域を選んでください。')
           return
         }
         setPosition([coords.longitude, coords.latitude])
       },
       (cause) => {
         if (requestId.current !== id) return
-        setError(
+        showError(
           cause.code === 1
             ? '位置情報が許可されていません。地図から地域を選ぶか、ブラウザの設定で許可してください。'
             : '現在地を取得できませんでした。地図から地域を選ぶか、現在地ボタンで再試行してください。',
@@ -43,12 +55,13 @@ export function useCurrentLocation() {
       },
       { enableHighAccuracy: false, timeout: 10_000, maximumAge: 0 },
     )
-  }, [])
+  }, [showError])
 
   useEffect(() => {
     locate()
     return () => {
       requestId.current++
+      window.clearTimeout(errorTimer.current)
     }
   }, [locate])
 
