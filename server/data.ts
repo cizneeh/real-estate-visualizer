@@ -1,5 +1,5 @@
 import type { Feature, Point } from 'geojson'
-import { type Bounds, type Dataset, type PricePoint, STUDY_BOUNDS } from '../src/types'
+import { type Bounds, type Dataset, JAPAN_BOUNDS, type PricePoint } from '../src/types'
 
 export function numberValue(value: unknown): number | undefined {
   if (typeof value === 'number') return Number.isFinite(value) ? value : undefined
@@ -33,7 +33,7 @@ export function normalizePoint(
   if (feature.geometry?.type !== 'Point') return undefined
   const coordinates = (feature.geometry as Point).coordinates as [number, number]
   if (!coordinates.slice(0, 2).every(Number.isFinite)) return undefined
-  if (!inBounds(coordinates, STUDY_BOUNDS)) return undefined
+  if (!inBounds(coordinates, JAPAN_BOUNDS)) return undefined
   const p = feature.properties ?? {}
   if (dataset === 'transactions') {
     const area = numberValue(p.u_area_ja)
@@ -87,19 +87,21 @@ export function inBounds([lng, lat]: number[], [west, south, east, north]: Bound
 
 export function clipBounds(bounds: Bounds): Bounds | undefined {
   const clipped: Bounds = [
-    Math.max(bounds[0], STUDY_BOUNDS[0]),
-    Math.max(bounds[1], STUDY_BOUNDS[1]),
-    Math.min(bounds[2], STUDY_BOUNDS[2]),
-    Math.min(bounds[3], STUDY_BOUNDS[3]),
+    Math.max(bounds[0], JAPAN_BOUNDS[0]),
+    Math.max(bounds[1], JAPAN_BOUNDS[1]),
+    Math.min(bounds[2], JAPAN_BOUNDS[2]),
+    Math.min(bounds[3], JAPAN_BOUNDS[3]),
   ]
   return clipped[0] <= clipped[2] && clipped[1] <= clipped[3] ? clipped : undefined
 }
 
-export function tilesForBounds(bounds: Bounds, z: number) {
+export function tilesForBounds(bounds: Bounds, z: number, limit = 160) {
   const n = 2 ** z
   const x = (lng: number) => Math.floor(((lng + 180) / 360) * n)
   const y = (lat: number) =>
     Math.floor(((1 - Math.asinh(Math.tan((lat * Math.PI) / 180)) / Math.PI) / 2) * n)
+  if ((x(bounds[2]) - x(bounds[0]) + 1) * (y(bounds[1]) - y(bounds[3]) + 1) > limit)
+    return undefined
   const tiles: { z: number; x: number; y: number }[] = []
   for (let tx = x(bounds[0]); tx <= x(bounds[2]); tx++) {
     for (let ty = y(bounds[3]); ty <= y(bounds[1]); ty++) tiles.push({ z, x: tx, y: ty })

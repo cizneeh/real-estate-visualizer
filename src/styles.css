@@ -91,12 +91,6 @@ p {
   letter-spacing: 0.06em;
   font-weight: 650;
 }
-.brand p {
-  font-size: 12px;
-  letter-spacing: 0.18em;
-  color: #75828d;
-  margin-top: 6px;
-}
 .sidebar-content {
   padding: 27px 25px 20px;
   overflow-y: auto;
@@ -111,30 +105,6 @@ p {
   gap: 8px;
   align-items: center;
   color: #879ca6;
-}
-.intro .eyebrow {
-  color: #537b73;
-}
-.live-dot {
-  width: 5px;
-  height: 5px;
-  background: #4b947a;
-  border-radius: 100%;
-}
-.intro h2 {
-  font-size: 27px;
-  line-height: 1.6;
-  font-weight: 550;
-  letter-spacing: 0.015em;
-  margin: 14px 0 11px;
-}
-.intro p {
-  font-size: 12px;
-  color: #7a848b;
-  line-height: 1.9;
-}
-.dataset-section {
-  margin-top: 32px;
 }
 .section-heading {
   display: flex;
@@ -367,17 +337,45 @@ p {
   flex: 1;
   min-width: 0;
   overflow: hidden;
-  background: #0e1720;
+  background: #293d4a;
 }
 .map-canvas {
   position: absolute;
   inset: 0;
 }
+.current-location-marker {
+  width: 15px;
+  height: 15px;
+  background: #4f9ff5;
+  border: 3px solid white;
+  border-radius: 50%;
+  box-shadow:
+    0 0 0 7px #4f9ff530,
+    0 2px 8px #0006;
+  pointer-events: none;
+}
+.location-notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  width: min(380px, calc(100vw - 160px));
+  margin-top: 14px;
+  padding: 10px 12px;
+  border-radius: 6px;
+  background: #18242fe8;
+  color: #c2d3df;
+  font-size: 12px;
+  line-height: 1.7;
+}
+.location-notice svg {
+  flex-shrink: 0;
+  margin-top: 3px;
+}
 .map-vignette {
   position: absolute;
   inset: 0;
   pointer-events: none;
-  background: linear-gradient(180deg, #0d1722aa, transparent 28%, transparent 65%, #0d17226e);
+  background: linear-gradient(180deg, #17293626, transparent 20%, transparent 78%, #1729361a);
 }
 .map-topbar {
   position: absolute;
@@ -418,39 +416,7 @@ p {
   color: #8b9fae;
   font-size: 12px;
 }
-.place-shortcuts {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  background: #17232fe8;
-  border: 1px solid #3a47525c;
-  padding: 4px;
-  border-radius: 7px;
-  backdrop-filter: blur(12px);
-}
-.place-shortcuts button {
-  background: transparent;
-  border: 0;
-  color: #9bacb8;
-  border-radius: 4px;
-  font-size: 14px;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 13px;
-  white-space: nowrap;
-}
-.place-shortcuts button:hover,
-.place-shortcuts button.active {
-  background: #2e404c;
-  color: #eff9f8;
-}
-.home-dot {
-  width: 4px;
-  height: 4px;
-  border-radius: 50%;
-  background: #89c6aa;
-}
+
 .map-heading {
   position: absolute;
   top: 104px;
@@ -954,17 +920,6 @@ p {
   .sidebar-content {
     padding-top: 19px;
   }
-  .intro h2 {
-    font-size: 24px;
-    line-height: 1.5;
-    margin: 10px 0;
-  }
-  .intro p {
-    display: none;
-  }
-  .dataset-section {
-    margin-top: 23px;
-  }
   .dataset-button {
     padding: 10px 10px;
   }
@@ -1004,9 +959,7 @@ p {
   .location-divider {
     display: none;
   }
-  .place-shortcuts button {
-    padding: 8px 9px;
-  }
+
   .map-topbar,
   .map-bottom {
     left: 20px;
@@ -1084,13 +1037,7 @@ p {
     font-size: 14px;
     gap: 8px;
   }
-  .place-shortcuts {
-    margin-left: auto;
-  }
-  .place-shortcuts button {
-    font-size: 14px;
-    padding: 6px 8px;
-  }
+
   .map-heading {
     left: 19px;
     top: 104px;
@@ -1153,23 +1100,14 @@ p {
   }
 }
 @media (max-width: 460px) {
-  .place-shortcuts {
-    width: 100%;
-    justify-content: space-between;
-  }
-  .place-shortcuts button {
-    flex: 1;
-    justify-content: center;
-    font-size: 14px;
-  }
   .map-heading {
-    top: 127px;
+    top: 85px;
   }
   .map-heading h2 {
     font-size: 17px;
   }
   .map-tools {
-    top: 230px;
+    top: 179px;
   }
   .map-heading p {
     font-size: 12px;

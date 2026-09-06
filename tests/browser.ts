@@ -6,11 +6,19 @@ const browser = await chromium.launch({ channel: 'chrome', headless: true })
 const context = await browser.newContext({
   viewport: { width: 1512, height: 982 },
   deviceScaleFactor: 1,
+  permissions: ['geolocation'],
+  geolocation: { longitude: 135.5023, latitude: 34.6937 },
 })
 const page = await context.newPage()
 page.setDefaultTimeout(15_000)
 const errors: string[] = []
+const requestedBounds: number[][] = []
 page.on('pageerror', (error) => errors.push(error.message))
+page.on('request', (request) => {
+  const url = new URL(request.url())
+  if (url.pathname === '/api/data')
+    requestedBounds.push((url.searchParams.get('bounds') ?? '').split(',').map(Number))
+})
 const destination = 'tmp/screenshots'
 await mkdir(destination, { recursive: true })
 
@@ -26,16 +34,35 @@ async function ready() {
   await page.waitForTimeout(800)
 }
 
+function expectLocation(longitude: number, latitude: number) {
+  const bounds = requestedBounds.at(-1)
+  assert.ok(bounds)
+  assert.ok(bounds[0] < longitude && longitude < bounds[2])
+  assert.ok(bounds[1] < latitude && latitude < bounds[3])
+  assert.ok(bounds[2] - bounds[0] < 0.5)
+  assert.ok(bounds[3] - bounds[1] < 0.5)
+}
+
 try {
   await page.goto(process.env.APP_URL ?? 'http://127.0.0.1:5173/')
   await ready()
-  await page.screenshot({ path: `${destination}/desktop-3d.png`, fullPage: true })
-  console.log('PASS: initial live data and desktop 3D')
+  expectLocation(135.5023, 34.6937)
+  await expect(page.getByRole('img', { name: '現在地', exact: true })).toBeVisible()
+  await expect(page.getByRole('navigation', { name: '地域に移動' })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: '新宿', exact: true })).toHaveCount(0)
+  await page.screenshot({ path: `${destination}/osaka-current-location.png`, fullPage: true })
+  console.log('PASS: automatic Osaka geolocation, live data, desktop 3D, no Tokyo shortcuts')
 
-  await page.getByRole('button', { name: '国分寺', exact: true }).click()
-  await expect(page.getByRole('button', { name: '国分寺', exact: true })).toHaveClass('active')
-  await page.waitForTimeout(1800)
+  await page.getByRole('button', { name: '全国を表示', exact: true }).click()
+  await expect(page.getByRole('status')).toContainText('見たい地域を拡大すると', {
+    timeout: 15_000,
+  })
+  await expect(page.getByRole('button', { name: '再試行', exact: true })).toHaveCount(0)
+  await page.screenshot({ path: `${destination}/japan-overview.png`, fullPage: true })
+  await page.getByRole('button', { name: '現在地に戻る', exact: true }).click()
+  await page.waitForTimeout(1500)
   await ready()
+  expectLocation(135.5023, 34.6937)
   await page.getByRole('button', { name: '住宅地', exact: true }).click()
   await expect(page.getByRole('button', { name: '住宅地', exact: true })).toHaveAttribute(
     'aria-pressed',
@@ -46,16 +73,18 @@ try {
   await page.waitForTimeout(1800)
   await ready()
   await expect(page.getByRole('complementary', { name: '地点の詳細' })).toBeVisible()
-  await page.screenshot({ path: `${destination}/kokubunji-detail.png`, fullPage: true })
-  console.log('PASS: Kokubunji, residential filter, detail selection survives map movement')
+  await page.screenshot({ path: `${destination}/osaka-detail.png`, fullPage: true })
+  console.log('PASS: national overview, return to location, residential filter, detail selection')
 
-  await page.getByRole('button', { name: '立川', exact: true }).click()
+  await context.setGeolocation({ longitude: 127.6809, latitude: 26.2124 })
+  await page.getByRole('button', { name: '現在地に戻る', exact: true }).click()
   await page.waitForTimeout(1800)
   await ready()
   await page.getByTitle('ポイント表示', { exact: true }).click()
   await page.waitForTimeout(900)
   await ready()
-  await page.screenshot({ path: `${destination}/tachikawa-points.png`, fullPage: true })
+  expectLocation(127.6809, 26.2124)
+  await page.screenshot({ path: `${destination}/naha-points.png`, fullPage: true })
 
   await page.getByRole('button', { name: /地価の変化 公示地価の前年比/ }).click()
   await ready()
@@ -64,7 +93,7 @@ try {
   await page.getByRole('button', { name: '2024年を表示' }).click()
   await ready()
   await expect(page.locator('.map-heading p')).toContainText('2024年')
-  console.log('PASS: Tachikawa, point mode, annual change, year selection')
+  console.log('PASS: Naha geolocation, point mode, annual change, year selection')
 
   await page.getByRole('button', { name: /基準地価 7月1日時点の土地の価格/ }).click()
   await ready()
@@ -120,6 +149,14 @@ try {
   await ready()
   console.log('PASS: error recovery, empty data, timeline playback')
 
+  await context.setGeolocation({ longitude: 141.3545, latitude: 43.0618 })
+  await page.getByRole('button', { name: '現在地に戻る', exact: true }).click()
+  await page.waitForTimeout(1800)
+  await ready()
+  expectLocation(141.3545, 43.0618)
+  await page.screenshot({ path: `${destination}/sapporo-transactions.png`, fullPage: true })
+  console.log('PASS: Sapporo geolocation and live condominium transactions')
+
   await page.getByRole('button', { name: /データ・表示について/ }).click()
   await expect(page.getByRole('dialog')).toBeVisible()
   await page.keyboard.press('Escape')
@@ -133,11 +170,70 @@ try {
   await ready()
   await page.screenshot({ path: `${destination}/mobile.png`, fullPage: true })
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false)
-  assert.deepEqual(errors, [])
   console.log('PASS: information dialog, mobile controls, no horizontal overflow or JS errors')
+
+  for (const failure of ['denied', 'unavailable', 'timeout', 'unsupported', 'outside'] as const) {
+    const fallback = await browser.newContext({
+      viewport: { width: 390, height: 844 },
+      ...(failure === 'outside'
+        ? {
+            permissions: ['geolocation'],
+            geolocation: { longitude: -74.006, latitude: 40.7128 },
+          }
+        : {}),
+    })
+    const fallbackPage = await fallback.newPage()
+    fallbackPage.on('pageerror', (error) => errors.push(error.message))
+    if (failure === 'denied') {
+      const cdp = await fallback.newCDPSession(fallbackPage)
+      await cdp.send('Browser.setPermission', {
+        permission: { name: 'geolocation' },
+        setting: 'denied',
+        origin: new URL(process.env.APP_URL ?? 'http://127.0.0.1:5173/').origin,
+      })
+    } else if (failure !== 'outside') {
+      await fallback.addInitScript((reason) => {
+        Object.defineProperty(navigator, 'geolocation', {
+          configurable: true,
+          value:
+            reason === 'unsupported'
+              ? undefined
+              : {
+                  getCurrentPosition(_success: PositionCallback, fail: PositionErrorCallback) {
+                    fail({ code: reason === 'timeout' ? 3 : 2 } as GeolocationPositionError)
+                  },
+                },
+        })
+      }, failure)
+    }
+    await fallbackPage.goto(process.env.APP_URL ?? 'http://127.0.0.1:5173/')
+    await expect(fallbackPage.locator('.location-notice')).toContainText(
+      failure === 'denied'
+        ? '位置情報が許可されていません'
+        : failure === 'outside'
+          ? '現在地は地図の表示範囲外'
+          : '現在地を取得できません',
+    )
+    await expect(fallbackPage.getByRole('status')).toContainText('見たい地域を拡大すると', {
+      timeout: 30_000,
+    })
+    await expect(fallbackPage.getByRole('button', { name: '現在地に戻る' })).toBeEnabled()
+    await fallbackPage.screenshot({
+      path: `${destination}/location-${failure}.png`,
+      fullPage: true,
+    })
+    assert.equal(
+      await fallbackPage.evaluate(() => document.documentElement.scrollWidth > innerWidth),
+      false,
+    )
+    await fallback.close()
+    console.log(`PASS: geolocation ${failure} falls back to Japan with usable controls`)
+  }
+  assert.deepEqual(errors, [])
 } catch (error) {
   await page.screenshot({ path: `${destination}/test-failure.png`, fullPage: true })
   console.error('Browser status:', await page.getByRole('status').textContent())
+  console.error('Browser errors:', errors)
   throw error
 } finally {
   await browser.close()

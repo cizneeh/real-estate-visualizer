@@ -29,15 +29,7 @@ export interface DataResponse {
   tiles: number
   failedTiles: number
   message?: string
+  zoomRequired?: boolean
 }
 
-export const STUDY_BOUNDS: Bounds = [139.35, 35.57, 139.88, 35.83]
-
-export const PLACES = [
-  { name: '東京全体', center: [139.625, 35.705] as [number, number], zoom: 10.8 },
-  { name: '都心', center: [139.757, 35.681] as [number, number], zoom: 12.7 },
-  { name: '新宿', center: [139.7, 35.692] as [number, number], zoom: 13 },
-  { name: '吉祥寺', center: [139.579, 35.703] as [number, number], zoom: 13 },
-  { name: '国分寺', center: [139.4805, 35.702] as [number, number], zoom: 13 },
-  { name: '立川', center: [139.413, 35.699] as [number, number], zoom: 13 },
-]
+export const JAPAN_BOUNDS: Bounds = [122, 20, 154, 46]

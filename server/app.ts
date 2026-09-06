@@ -50,12 +50,6 @@ export function createApp(getApiKey: () => string | undefined) {
     ) {
       return c.json({ error: '表示範囲・年度・データの指定を確認してください。' }, 400)
     }
-    const apiKey = getApiKey()
-    if (!apiKey)
-      return c.json(
-        { error: '.env に REINFOLIB_API_KEY を設定してサーバーを再起動してください。' },
-        503,
-      )
     const clipped = clipBounds(bounds as Bounds)
     const response: DataResponse = {
       points: [],
@@ -67,8 +61,18 @@ export function createApp(getApiKey: () => string | undefined) {
     }
     if (!clipped) return c.json(response)
     const tiles = tilesForBounds(clipped, 13)
-    if (tiles.length > 160)
-      return c.json({ error: 'もう少しズームして表示範囲を絞ってください。' }, 400)
+    if (!tiles)
+      return c.json({
+        ...response,
+        zoomRequired: true,
+        message: '見たい地域を拡大すると、価格データが表示されます。',
+      })
+    const apiKey = getApiKey()
+    if (!apiKey)
+      return c.json(
+        { error: '.env に REINFOLIB_API_KEY を設定してサーバーを再起動してください。' },
+        503,
+      )
     response.tiles = tiles.length
     const results = await Promise.allSettled(
       tiles.map(async (tile) => {

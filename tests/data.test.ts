@@ -4,7 +4,7 @@ import type { Feature } from 'geojson'
 import { createApp } from '../server/app'
 import { clipBounds, normalizePoint, numberValue, tilesForBounds, yenValue } from '../server/data'
 import { columnCollection, groupTransactions, median } from '../src/metrics'
-import { type PricePoint, STUDY_BOUNDS } from '../src/types'
+import { type Bounds, JAPAN_BOUNDS, type PricePoint } from '../src/types'
 
 const feature = (properties: Record<string, unknown>): Feature => ({
   type: 'Feature',
@@ -84,12 +84,60 @@ test('transaction groups use a median and keep the actual sample count', () => {
   assert.deepEqual(polygon[0], polygon[polygon.length - 1])
 })
 
-test('requests are bounded to Tokyo including Kokubunji and Tachikawa', () => {
-  assert.deepEqual(clipBounds([0, 0, 180, 85]), STUDY_BOUNDS)
-  assert.equal(clipBounds([130, 30, 131, 31]), undefined)
+test('requests cover Japan including Hokkaido, Okinawa, and remote islands', () => {
+  assert.deepEqual(clipBounds([0, 0, 180, 85]), JAPAN_BOUNDS)
+  assert.equal(clipBounds([0, 0, 1, 1]), undefined)
+  for (const coordinates of [
+    [141.35, 43.06],
+    [135.5, 34.69],
+    [130.4, 33.59],
+    [127.68, 26.21],
+    [123.0, 24.46],
+    [142.2, 27.09],
+    [153.98, 24.29],
+  ]) {
+    const bounds: Bounds = [
+      coordinates[0] - 0.005,
+      coordinates[1] - 0.005,
+      coordinates[0] + 0.005,
+      coordinates[1] + 0.005,
+    ]
+    assert.deepEqual(clipBounds(bounds), bounds)
+    for (const dataset of ['land', 'survey', 'change', 'transactions'] as const) {
+      const point = normalizePoint(
+        {
+          ...feature({
+            u_current_years_price_ja: '450,000(円/㎡)',
+            u_transaction_price_total_ja: '4,000万円',
+            u_area_ja: '80㎡',
+          }),
+          geometry: { type: 'Point', coordinates },
+        },
+        dataset,
+        0,
+      )
+      assert.deepEqual(point?.coordinates, coordinates)
+    }
+  }
   const tiles = tilesForBounds([139.4, 35.68, 139.5, 35.72], 13)
+  assert.ok(tiles)
   assert.ok(tiles.length > 0 && tiles.length < 20)
   assert.ok(tiles.every((tile) => tile.x >= 0 && tile.x < 8192 && tile.y >= 0 && tile.y < 8192))
+})
+
+test('nationwide overviews prompt for zoom without fetching upstream or requiring credentials', async () => {
+  assert.equal(tilesForBounds(JAPAN_BOUNDS, 13), undefined)
+  const app = createApp(() => {
+    throw new Error('An overview must not access upstream credentials')
+  })
+  for (const dataset of ['land', 'survey', 'change', 'transactions']) {
+    const response = await app.request(`/api/data?dataset=${dataset}&bounds=${JAPAN_BOUNDS}`)
+    assert.equal(response.status, 200)
+    const body = await response.json()
+    assert.equal(body.zoomRequired, true)
+    assert.equal(body.tiles, 0)
+    assert.deepEqual(body.points, [])
+  }
 })
 
 test('the API validates inputs, rejects foreign origins, and never returns the server credential', async () => {

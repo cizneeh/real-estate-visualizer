@@ -7,16 +7,17 @@ import {
   ChevronRight,
   Compass,
   ExternalLink,
+  Globe2,
   Info,
   Layers3,
   LoaderCircle,
+  LocateFixed,
   MapPin,
   Minus,
   MoveUpRight,
   Pause,
   Play,
   Plus,
-  RotateCcw,
   SlidersHorizontal,
   Sparkles,
   TrendingUp,
@@ -38,10 +39,11 @@ import {
   type Bounds,
   type DataResponse,
   type Dataset,
-  PLACES,
+  JAPAN_BOUNDS,
   type PricePoint,
   type ViewMode,
 } from './types'
+import { useCurrentLocation } from './useCurrentLocation'
 import { useMapTools } from './useMapTools'
 
 const DATASETS: { id: Dataset; name: string; description: string; icon: typeof MapPin }[] = [
@@ -71,15 +73,20 @@ export function App() {
   const [map, setMap] = useState<LibreMap>()
   const [mapRendered, setMapRendered] = useState(false)
   const [selectedId, setSelectedId] = useState<string>()
-  const [placeName, setPlaceName] = useState('東京')
   const [playing, setPlaying] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const infoDialog = useRef<HTMLDialogElement>(null)
+  const { position, locating, error: locationError, locate } = useCurrentLocation()
   const activeDataset = DATASETS.find((item) => item.id === dataset) ?? DATASETS[0]
   const handleBounds = useCallback((next: Bounds) => setBounds(next), [])
   const handleSelect = useCallback((point: PricePoint) => setSelectedId(point.id), [])
   const handleReady = useCallback((next: LibreMap) => setMap(next), [])
   const handleRendered = useCallback((ready: boolean) => setMapRendered(ready), [])
+
+  useEffect(() => {
+    if (!position) return
+    setSelectedId(undefined)
+  }, [position])
 
   useEffect(() => {
     if (!bounds) return
@@ -158,11 +165,10 @@ export function App() {
     if (next === 'change' && mode === 'heatmap') setMode('points')
   }
 
-  function visitPlace(place: (typeof PLACES)[number]) {
-    setPlaceName(place.name)
+  function showJapan() {
     setSelectedId(undefined)
     setSidebarOpen(false)
-    map?.flyTo({ center: place.center, zoom: place.zoom, duration: 1500, essential: false })
+    map?.fitBounds(JAPAN_BOUNDS, { padding: 40, pitch: 0, bearing: 0, duration: 1200 })
   }
 
   function focusPoint(point: PricePoint) {
@@ -177,10 +183,7 @@ export function App() {
           <div className="brand-mark">
             <Layers3 size={24} strokeWidth={1.5} />
           </div>
-          <div>
-            <h1>東京地価アトラス</h1>
-            <p>TOKYO LAND ATLAS</p>
-          </div>
+          <h1>街の値段</h1>
           <button
             className="icon-button mobile-close"
             type="button"
@@ -192,21 +195,6 @@ export function App() {
         </header>
 
         <div className="sidebar-content">
-          <div className="intro">
-            <span className="eyebrow">
-              <span className="live-dot" /> TOKYO, JAPAN
-            </span>
-            <h2>
-              街の価格を、
-              <br />
-              新しい視点で。
-            </h2>
-            <p>
-              都心から多摩へ。地図を動かして、
-              <br />
-              土地の価値とその変化を見つけよう。
-            </p>
-          </div>
           <section className="dataset-section" aria-labelledby="dataset-title">
             <div className="section-heading">
               <h3 id="dataset-title">表示するデータ</h3>
@@ -324,7 +312,9 @@ export function App() {
               <p className="empty-ranking">
                 {loading
                   ? '地図の範囲からデータを取得しています'
-                  : 'この範囲には対象地点がありません'}
+                  : currentData?.zoomRequired
+                    ? '見たい地域を拡大してください'
+                    : 'この範囲には対象地点がありません'}
               </p>
             )}
           </section>
@@ -344,6 +334,7 @@ export function App() {
           points={points}
           dataset={dataset}
           mode={mode}
+          position={position}
           onBounds={handleBounds}
           onSelect={handleSelect}
           onReady={handleReady}
@@ -361,40 +352,24 @@ export function App() {
               <SlidersHorizontal size={18} />
             </button>
             <MapPin size={16} />
-            <span>東京・多摩エリア</span>
+            <span>全国の不動産価格</span>
             <span className="location-divider" />
             <span className="location-meta">{year}</span>
           </div>
-          <nav className="place-shortcuts" aria-label="地域に移動">
-            {PLACES.filter((place) => place.name !== '東京全体').map((place) => (
-              <button
-                key={place.name}
-                type="button"
-                onClick={() => visitPlace(place)}
-                className={placeName === place.name ? 'active' : ''}
-              >
-                {place.name}
-                {place.name === '国分寺' && <span className="home-dot" />}
-              </button>
-            ))}
-          </nav>
         </div>
 
         <div className="map-heading">
-          <span className="eyebrow">THE SHAPE OF VALUE</span>
-          <h2>
-            {dataset === 'change'
-              ? '変わりゆく街を、見つける。'
-              : dataset === 'transactions'
-                ? '取引から、街の相場を知る。'
-                : '価格がつくる、東京の地形。'}
-          </h2>
+          <h2>{activeDataset.name}</h2>
           <p>
-            {activeDataset.name}
-            <span> / </span>
             {year}年<span> / </span>
             {dataset === 'transactions' ? '最寄り駅の位置に集約' : category}
           </p>
+          {(locating || locationError) && (
+            <div className="location-notice" aria-live="polite">
+              {locating ? <LoaderCircle size={14} className="spin" /> : <Info size={14} />}
+              <span>{locating ? '現在地を取得中…' : locationError}</span>
+            </div>
+          )}
         </div>
 
         <div className="map-tools">
@@ -438,8 +413,17 @@ export function App() {
             >
               <Compass size={19} />
             </button>
-            <button type="button" aria-label="東京全体を表示" onClick={() => visitPlace(PLACES[0])}>
-              <RotateCcw size={17} />
+            <button
+              type="button"
+              aria-label="現在地に戻る"
+              title="現在地に戻る"
+              disabled={locating}
+              onClick={locate}
+            >
+              {locating ? <LoaderCircle size={17} className="spin" /> : <LocateFixed size={17} />}
+            </button>
+            <button type="button" aria-label="全国を表示" title="全国を表示" onClick={showJapan}>
+              <Globe2 size={17} />
             </button>
           </div>
         </div>
@@ -584,9 +568,11 @@ export function App() {
               <>
                 <Info size={14} />
                 <span>{currentData.message}</span>
-                <button type="button" onClick={() => setRetry((value) => value + 1)}>
-                  再試行
-                </button>
+                {!currentData.zoomRequired && (
+                  <button type="button" onClick={() => setRetry((value) => value + 1)}>
+                    再試行
+                  </button>
+                )}
               </>
             ) : (
               <>
@@ -660,7 +646,10 @@ export function App() {
           </form>
         </div>
         <p>
-          国土交通省「不動産情報ライブラリ」の実データを、東京中心部〜立川周辺の範囲で表示しています。地図の移動や年度の変更に合わせて取得します。
+          国土交通省「不動産情報ライブラリ」の実データを、全国で表示しています。地図の移動や年度の変更に合わせて取得します。広域表示では、見たい地域を拡大してください。
+        </p>
+        <p>
+          位置情報を許可すると、最初に現在地の周辺を表示します。取得できない場合は日本全体から探索できます。現在地ボタンで再取得でき、位置情報は保存しません。
         </p>
         <h3>価格の読み方</h3>
         <p>

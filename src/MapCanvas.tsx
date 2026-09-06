@@ -2,8 +2,9 @@ import type { GeoJSONSource, Map as LibreMap } from 'maplibre-gl'
 import * as maplibregl from 'maplibre-gl'
 import workerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url'
 import { useEffect, useRef, useState } from 'react'
+import { configureBasemap } from './mapStyle'
 import { columnCollection, pointCollection } from './metrics'
-import { type Bounds, type Dataset, PLACES, type PricePoint, type ViewMode } from './types'
+import { type Bounds, type Dataset, JAPAN_BOUNDS, type PricePoint, type ViewMode } from './types'
 import 'maplibre-gl/dist/maplibre-gl.css'
 
 maplibregl.setWorkerUrl(workerUrl)
@@ -12,6 +13,7 @@ interface Props {
   points: PricePoint[]
   dataset: Dataset
   mode: ViewMode
+  position?: [number, number]
   onBounds: (bounds: Bounds) => void
   onSelect: (point: PricePoint) => void
   onReady: (map: LibreMap) => void
@@ -33,17 +35,15 @@ export function MapCanvas(props: Props) {
       map = new maplibregl.Map({
         container: container.current,
         style: 'https://tiles.openfreemap.org/styles/dark',
-        center: [139.66, 35.69],
-        zoom: 11.3,
-        pitch: 48,
-        bearing: -14,
-        minZoom: 9,
+        bounds: JAPAN_BOUNDS,
+        maxBounds: JAPAN_BOUNDS,
+        fitBoundsOptions: { padding: 40 },
+        pitch: 0,
+        bearing: 0,
+        minZoom: 2,
         maxZoom: 17,
         maxPitch: 65,
-        maxBounds: [
-          [139.2, 35.45],
-          [140.02, 35.95],
-        ],
+        renderWorldCopies: false,
         attributionControl: { compact: true },
         canvasContextAttributes: { preserveDrawingBuffer: true },
       })
@@ -60,18 +60,15 @@ export function MapCanvas(props: Props) {
     })
     const emitBounds = () => {
       const b = map.getBounds()
-      latest.current.onBounds([b.getWest(), b.getSouth(), b.getEast(), b.getNorth()])
+      latest.current.onBounds([
+        Math.max(-180, b.getWest()),
+        Math.max(-85, b.getSouth()),
+        Math.min(180, b.getEast()),
+        Math.min(85, b.getNorth()),
+      ])
     }
     map.on('load', () => {
-      for (const layer of map.getStyle().layers) {
-        if (layer.type === 'symbol' && layer.layout?.['text-field']) {
-          map.setLayoutProperty(layer.id, 'text-field', [
-            'coalesce',
-            ['get', 'name:ja'],
-            ['get', 'name'],
-          ])
-        }
-      }
+      configureBasemap(map)
       map.addSource('prices', { type: 'geojson', data: pointCollection([], 'land') })
       map.addSource('columns', { type: 'geojson', data: columnCollection([], 'land') })
       map.addLayer({
@@ -137,31 +134,6 @@ export function MapCanvas(props: Props) {
           'fill-extrusion-base': 0,
         },
       })
-      map.addSource('area-labels', {
-        type: 'geojson',
-        data: {
-          type: 'FeatureCollection',
-          features: PLACES.slice(1).map((place) => ({
-            type: 'Feature',
-            geometry: { type: 'Point', coordinates: place.center },
-            properties: { name: place.name },
-          })),
-        },
-      })
-      map.addLayer({
-        id: 'area-labels',
-        type: 'symbol',
-        source: 'area-labels',
-        layout: {
-          'text-field': ['get', 'name'],
-          'text-font': ['Noto Sans Regular'],
-          'text-size': 15,
-          'text-allow-overlap': true,
-          'text-offset': [0, 1],
-          'text-letter-spacing': 0.1,
-        },
-        paint: { 'text-color': '#edf4f8', 'text-halo-color': '#0e1b26', 'text-halo-width': 2.5 },
-      })
       map.on('click', (event) => {
         const features = map.queryRenderedFeatures(event.point, {
           layers: ['price-columns', 'price-points'],
@@ -218,9 +190,29 @@ export function MapCanvas(props: Props) {
     if (Math.abs(map.getPitch() - pitch) > 0.1) map.easeTo({ pitch, duration: 700 })
   }, [props.mode, props.dataset, ready])
 
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map || !ready || !props.position) return
+    map.flyTo({
+      center: props.position,
+      zoom: 13,
+      pitch: latest.current.mode === '3d' ? 48 : 0,
+      bearing: 0,
+      duration: 1200,
+    })
+    const element = document.createElement('div')
+    element.className = 'current-location-marker'
+    element.setAttribute('role', 'img')
+    element.setAttribute('aria-label', '現在地')
+    const marker = new maplibregl.Marker({ element }).setLngLat(props.position).addTo(map)
+    return () => {
+      marker.remove()
+    }
+  }, [props.position, ready])
+
   return (
     <>
-      <section className="map-canvas" ref={container} aria-label="東京の不動産価格マップ" />
+      <section className="map-canvas" ref={container} aria-label="全国の不動産価格マップ" />
       {error && (
         <div className="map-error" role="alert">
           {error}
