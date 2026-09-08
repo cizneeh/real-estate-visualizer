@@ -1,9 +1,9 @@
 import {
-  ArrowDownRight,
   ArrowUpRight,
   Box,
   Building2,
   Check,
+  ChevronDown,
   ChevronRight,
   Compass,
   ExternalLink,
@@ -30,12 +30,12 @@ import { MapCanvas } from './MapCanvas'
 import {
   CHANGE_COLORS,
   changeLabel,
-  colorFor,
   groupTransactions,
   median,
   PRICE_COLORS,
   priceLabel,
 } from './metrics'
+import { PointDetails } from './PointDetails'
 import { type Bounds, type Dataset, JAPAN_BOUNDS, type PricePoint, type ViewMode } from './types'
 import { useCurrentLocation } from './useCurrentLocation'
 import { useMapTools } from './useMapTools'
@@ -67,6 +67,7 @@ export function App() {
   const [selectedId, setSelectedId] = useState<string>()
   const [playing, setPlaying] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [legendOpen, setLegendOpen] = useState(false)
   const infoDialog = useRef<HTMLDialogElement>(null)
   const { position, locating, error: locationError, locate } = useCurrentLocation()
   const activeDataset = DATASETS.find((item) => item.id === dataset) ?? DATASETS[0]
@@ -371,127 +372,66 @@ export function App() {
         </div>
 
         {selected && (
-          <aside className="detail-panel" aria-label="地点の詳細">
-            <div className="detail-heading">
-              <span className="eyebrow">
-                {dataset === 'transactions' ? 'STATION AREA' : 'SELECTED POINT'}
-              </span>
-              <button
-                type="button"
-                className="icon-button"
-                aria-label="詳細を閉じる"
-                onClick={() => setSelectedId(undefined)}
-              >
-                <X size={18} />
-              </button>
-            </div>
-            <span className="detail-category">{selected.category}</span>
-            <h3>{selected.address}</h3>
-            <p className="detail-town">{selected.municipality}</p>
-            <div className="detail-price" style={{ color: colorFor(selected, dataset) }}>
-              {priceLabel(selected.price)}
-              <small>万円 / ㎡</small>
-            </div>
-            {selected.change !== undefined && (
-              <div className="detail-change">
-                {selected.change >= 0 ? <ArrowUpRight size={17} /> : <ArrowDownRight size={17} />}
-                前年比 {changeLabel(selected.change)}
-              </div>
-            )}
-            <dl>
-              {selected.count !== undefined && (
-                <>
-                  <dt>取引件数</dt>
-                  <dd>{selected.count}件</dd>
-                </>
-              )}
-              {selected.station && (
-                <>
-                  <dt>最寄り駅</dt>
-                  <dd>{selected.station}</dd>
-                </>
-              )}
-              {selected.stationDistance && (
-                <>
-                  <dt>駅までの道路距離</dt>
-                  <dd>{selected.stationDistance}</dd>
-                </>
-              )}
-              {selected.area !== undefined && (
-                <>
-                  <dt>地積</dt>
-                  <dd>{selected.area.toLocaleString()}㎡</dd>
-                </>
-              )}
-              {selected.zoning && (
-                <>
-                  <dt>用途地域</dt>
-                  <dd>{selected.zoning}</dd>
-                </>
-              )}
-              {selected.usage && (
-                <>
-                  <dt>利用現況</dt>
-                  <dd>{selected.usage}</dd>
-                </>
-              )}
-              {selected.previousPrice ? (
-                <>
-                  <dt>前年の価格</dt>
-                  <dd>{priceLabel(selected.previousPrice)}万円/㎡</dd>
-                </>
-              ) : undefined}
-            </dl>
-            <p className="detail-note">
-              {selected.period ?? `${year}年の取引価格（㎡単価）の中央値`}
-              {dataset === 'transactions' && (
-                <>
-                  <br />
-                  物件の所在地を示すものではありません。
-                </>
-              )}
-            </p>
-          </aside>
+          <PointDetails
+            key={`${dataset}-${year}-${selected.id}`}
+            point={selected}
+            dataset={dataset}
+            year={year}
+            onClose={() => setSelectedId(undefined)}
+          />
         )}
 
         <div className={`map-bottom ${showZoomHint ? 'has-zoom-hint' : ''}`}>
           <div className="map-context">
-            <div className="legend">
-              <div className="legend-title">
-                <span>
-                  {dataset === 'change'
-                    ? '対前年変動率'
-                    : mode === 'heatmap'
-                      ? '価格で重み付けした密度'
-                      : '㎡あたりの価格'}
-                </span>
-                <small>
-                  {mode === 'heatmap' ? '相対値' : dataset === 'change' ? '%' : '万円 / ㎡'}
-                </small>
+            <div className="legend" data-expanded={legendOpen}>
+              <button
+                type="button"
+                className="legend-toggle"
+                aria-expanded={legendOpen}
+                aria-controls="map-legend"
+                onClick={() => setLegendOpen((open) => !open)}
+              >
+                <Layers3 size={15} aria-hidden="true" />
+                <span>{mode === '3d' ? '色と高さの見方' : '色の見方'}</span>
+                <ChevronDown size={15} aria-hidden="true" />
+              </button>
+              <div id="map-legend" className="legend-content">
+                <div className="legend-title">
+                  <span>
+                    {dataset === 'change'
+                      ? '対前年変動率'
+                      : mode === 'heatmap'
+                        ? '価格で重み付けした密度'
+                        : '㎡あたりの価格'}
+                  </span>
+                  <small>
+                    {mode === 'heatmap' ? '相対値' : dataset === 'change' ? '%' : '万円 / ㎡'}
+                  </small>
+                </div>
+                <div
+                  className="legend-gradient"
+                  style={{
+                    background: `linear-gradient(90deg, ${(dataset === 'change' ? CHANGE_COLORS : PRICE_COLORS).join(',')})`,
+                  }}
+                />
+                <div className="legend-labels">
+                  {(mode === 'heatmap'
+                    ? ['低い', '高い']
+                    : dataset === 'change'
+                      ? ['−5', '0', '2', '5', '10', '20+']
+                      : ['0', '30', '70', '150', '500', '1,500+']
+                  ).map((label) => (
+                    <span key={label}>{label}</span>
+                  ))}
+                </div>
+                {mode === '3d' && (
+                  <p>
+                    {dataset === 'change'
+                      ? '高さは変動率の絶対値、色は増減を表します'
+                      : '高さは価格の平方根に比例（上限6,500m）'}
+                  </p>
+                )}
               </div>
-              <div
-                className="legend-gradient"
-                style={{
-                  background: `linear-gradient(90deg, ${(dataset === 'change' ? CHANGE_COLORS : PRICE_COLORS).join(',')})`,
-                }}
-              />
-              <div className="legend-labels">
-                {(mode === 'heatmap'
-                  ? ['低い', '高い']
-                  : dataset === 'change'
-                    ? ['−5', '0', '2', '5', '10', '20+']
-                    : ['0', '30', '70', '150', '500', '1,500+']
-                ).map((label) => (
-                  <span key={label}>{label}</span>
-                ))}
-              </div>
-              {mode === '3d' && (
-                <p>
-                  {dataset === 'change'
-                    ? '高さは変動率の絶対値、色は増減を表します'
-                    : '高さは価格の平方根に比例（上限6,500m）'}
-                </p>
-              )}
             </div>
             <div
               className="data-status"
