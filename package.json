@@ -12,6 +12,7 @@
     "test": "tsx --test tests/*.test.ts",
     "test:e2e": "tsx tests/browser.ts",
     "test:e2e:cache": "tsx tests/browser-cache.ts",
+    "test:e2e:history": "tsx tests/browser-history.ts",
     "cf:types": "wrangler types --include-runtime=false",
     "cf:dev": "npm run build && wrangler dev --port 8790",
     "deploy": "npm run build && wrangler deploy",

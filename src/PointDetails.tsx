@@ -31,9 +31,7 @@ export function PointDetails({ point, dataset, year, onClose }: Props) {
   return (
     <aside className="detail-panel" aria-label="地点の詳細">
       <div className="detail-heading">
-        <span className="eyebrow">
-          {dataset === 'transactions' ? 'STATION AREA' : 'SELECTED POINT'}
-        </span>
+        <span className="detail-category">{point.category}</span>
         <button type="button" className="icon-button" aria-label="詳細を閉じる" onClick={onClose}>
           <X size={18} />
         </button>
@@ -47,7 +45,6 @@ export function PointDetails({ point, dataset, year, onClose }: Props) {
         aria-label="地点の詳細情報"
       >
         <div className="detail-content" ref={content}>
-          <span className="detail-category">{point.category}</span>
           <h3>{point.address}</h3>
           <p className="detail-town">{point.municipality}</p>
           <div className="detail-metrics">

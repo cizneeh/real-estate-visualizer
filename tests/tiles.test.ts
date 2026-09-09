@@ -230,7 +230,7 @@ test('tile API returns the whole tile with stable IDs, rejects invalid tiles, an
     '/api/tiles/12/1/1',
     '/api/tiles/13/8192/1',
     '/api/tiles/13/0/0',
-    `/api/tiles/${tileKey(tile)}?year=1999`,
+    `/api/tiles/${tileKey(tile)}?year=1994`,
     `/api/tiles/${tileKey(tile)}?dataset=bad`,
     `/api/tiles/${tileKey(tile)}?priority=bad`,
   ]) {

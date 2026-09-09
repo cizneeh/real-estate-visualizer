@@ -10,6 +10,7 @@ import {
   tilesForBounds,
 } from '../src/tiles'
 import type { Bounds, DataResponse, Dataset, PricePoint, TileResponse } from '../src/types'
+import { FIRST_YEAR, validYear } from '../src/years'
 import { normalizePoint } from './data'
 import { createTileStore, UpstreamError } from './tileStore'
 
@@ -17,10 +18,6 @@ const BASE_URL = 'https://www.reinfolib.mlit.go.jp/ex-api/external/'
 
 function validDataset(value: string): value is Dataset {
   return ['land', 'survey', 'change', 'transactions'].includes(value)
-}
-
-function validYear(value: number) {
-  return Number.isInteger(value) && value >= 2020 && value <= new Date().getFullYear()
 }
 
 export function createApp(getApiKey: () => string | undefined, store = createTileStore()) {
@@ -53,7 +50,7 @@ export function createApp(getApiKey: () => string | undefined, store = createTil
       y: String(tile.y),
     })
     if (dataset === 'transactions') {
-      params.set('from', `${year}1`)
+      params.set('from', `${year}${year === FIRST_YEAR.transactions ? 3 : 1}`)
       params.set('to', `${year}4`)
       params.set('priceClassification', '01')
       params.set('landTypeCode', '07')
@@ -83,7 +80,7 @@ export function createApp(getApiKey: () => string | undefined, store = createTil
     const priority = c.req.query('priority') ?? 'visible'
     if (
       !validDataset(dataset) ||
-      !validYear(year) ||
+      !validYear(dataset, year) ||
       tile.z !== DATA_ZOOM ||
       ![tile.x, tile.y].every(
         (value) => Number.isInteger(value) && value >= 0 && value < 2 ** tile.z,
@@ -116,7 +113,7 @@ export function createApp(getApiKey: () => string | undefined, store = createTil
     const bounds = (c.req.query('bounds') ?? '').split(',').map(Number)
     if (
       !validDataset(dataset) ||
-      !validYear(year) ||
+      !validYear(dataset, year) ||
       bounds.length !== 4 ||
       !bounds.every(Number.isFinite) ||
       bounds[0] >= bounds[2] ||
