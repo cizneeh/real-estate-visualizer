@@ -88,7 +88,7 @@ try {
   await expect(page.getByTitle('前年比は3Dまたはポイントで表示します')).toBeDisabled()
   await page.getByRole('button', { name: '2024年を表示' }).click()
   await ready()
-  await expect(page.locator('.map-heading p')).toContainText('2024年')
+  await expect(page.getByRole('combobox', { name: '観測年' })).toHaveValue('2024')
   console.log('PASS: Naha geolocation, point mode, annual change, year selection')
 
   await page.getByRole('button', { name: /基準地価 7月1日時点の土地の価格/ }).click()

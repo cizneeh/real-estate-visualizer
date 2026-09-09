@@ -14,7 +14,6 @@ import {
   LocateFixed,
   MapPin,
   Minus,
-  MoveUpRight,
   Pause,
   Play,
   Plus,
@@ -40,6 +39,7 @@ import { type Bounds, type Dataset, JAPAN_BOUNDS, type PricePoint, type ViewMode
 import { useCurrentLocation } from './useCurrentLocation'
 import { useMapTools } from './useMapTools'
 import { usePriceTiles } from './usePriceTiles'
+import { FIRST_YEAR, LAST_YEAR, yearsForDataset } from './years'
 
 const DATASETS: { id: Dataset; name: string; description: string; icon: typeof MapPin }[] = [
   { id: 'land', name: '公示地価', description: '1月1日時点の土地の価格', icon: Layers3 },
@@ -53,7 +53,6 @@ const DATASETS: { id: Dataset; name: string; description: string; icon: typeof M
   },
 ]
 const EMPTY_POINTS: PricePoint[] = []
-const YEARS = [2020, 2021, 2022, 2023, 2024, 2025, 2026]
 
 export function App() {
   const [dataset, setDataset] = useState<Dataset>('land')
@@ -67,10 +66,11 @@ export function App() {
   const [selectedId, setSelectedId] = useState<string>()
   const [playing, setPlaying] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const yearSelector = useRef<HTMLDivElement>(null)
+  const years = useMemo(() => yearsForDataset(dataset), [dataset])
   const [legendOpen, setLegendOpen] = useState(false)
   const infoDialog = useRef<HTMLDialogElement>(null)
   const { position, locating, error: locationError, locate } = useCurrentLocation()
-  const activeDataset = DATASETS.find((item) => item.id === dataset) ?? DATASETS[0]
   const handleBounds = useCallback((next: Bounds) => setBounds(next), [])
   const handleSelect = useCallback((point: PricePoint) => setSelectedId(point.id), [])
   const handleReady = useCallback((next: LibreMap) => setMap(next), [])
@@ -86,13 +86,19 @@ export function App() {
   }, [error])
 
   useEffect(() => {
+    yearSelector.current?.children
+      .item(years.indexOf(year))
+      ?.scrollIntoView({ block: 'nearest', inline: 'center' })
+  }, [year, years])
+
+  useEffect(() => {
     if (!playing || loading || !mapRendered || error) return
     const timer = window.setTimeout(
-      () => setYear((value) => (value >= 2026 ? 2020 : value + 1)),
+      () => setYear(year >= LAST_YEAR ? FIRST_YEAR[dataset] : year + 1),
       2400,
     )
     return () => window.clearTimeout(timer)
-  }, [playing, loading, mapRendered, error])
+  }, [playing, loading, mapRendered, error, dataset, year])
 
   const currentData = data?.dataset === dataset && data.year === year ? data : undefined
   const showZoomHint = currentData?.zoomRequired && !loading && mapRendered && !error
@@ -125,9 +131,16 @@ export function App() {
 
   function changeDataset(next: Dataset) {
     setDataset(next)
+    setYear((value) => Math.max(FIRST_YEAR[next], value))
     setSelectedId(undefined)
     setPlaying(false)
     if (next === 'change' && mode === 'heatmap') setMode('points')
+  }
+
+  function changeYear(next: number) {
+    setPlaying(false)
+    setSelectedId(undefined)
+    setYear(next)
   }
 
   function showJapan() {
@@ -294,7 +307,6 @@ export function App() {
             データ・表示について
             <ExternalLink size={13} />
           </button>
-          <span>出典：国土交通省 不動産情報ライブラリ</span>
         </footer>
       </aside>
 
@@ -311,36 +323,21 @@ export function App() {
           onRendered={handleRendered}
         />
         <div className="map-vignette" />
-        <div className="map-topbar">
-          <div className="location-control">
-            <button
-              type="button"
-              className="icon-button mobile-menu"
-              aria-label="データパネルを開く"
-              onClick={() => setSidebarOpen(true)}
-            >
-              <SlidersHorizontal size={18} />
-            </button>
-            <MapPin size={16} />
-            <span>全国の不動産価格</span>
-            <span className="location-divider" />
-            <span className="location-meta">{year}</span>
-          </div>
-        </div>
+        <button
+          type="button"
+          className="icon-button mobile-menu"
+          aria-label="データパネルを開く"
+          onClick={() => setSidebarOpen(true)}
+        >
+          <SlidersHorizontal size={18} />
+        </button>
 
-        <div className="map-heading">
-          <h2>{activeDataset.name}</h2>
-          <p>
-            {year}年<span> / </span>
-            {dataset === 'transactions' ? '最寄り駅の位置に集約' : category}
-          </p>
-          {(locating || locationError) && (
-            <div className="location-notice" aria-live="polite">
-              {locating ? <LoaderCircle size={14} className="spin" /> : <Info size={14} />}
-              <span>{locating ? '現在地を取得中…' : locationError}</span>
-            </div>
-          )}
-        </div>
+        {(locating || locationError) && (
+          <div className="location-notice" aria-live="polite">
+            {locating ? <LoaderCircle size={14} className="spin" /> : <Info size={14} />}
+            <span>{locating ? '現在地を取得中…' : locationError}</span>
+          </div>
+        )}
 
         <div className="map-tools">
           <fieldset className="mode-control" aria-label="表示方法">
@@ -508,13 +505,20 @@ export function App() {
             </button>
           </div>
           <div className="timeline">
-            <div className="timeline-label">
+            <label className="timeline-label">
               <span>観測年</span>
-              <strong>
-                {year}
-                <small>年</small>
-              </strong>
-            </div>
+              <select
+                aria-label="観測年"
+                value={year}
+                onChange={(event) => changeYear(Number(event.target.value))}
+              >
+                {years.map((value) => (
+                  <option key={value} value={value}>
+                    {value}年
+                  </option>
+                ))}
+              </select>
+            </label>
             <button
               type="button"
               className={`play-button ${playing ? 'playing' : ''}`}
@@ -528,30 +532,20 @@ export function App() {
                 <Play size={16} fill="currentColor" />
               )}
             </button>
-            <div className="year-selector">
-              {YEARS.map((value) => (
+            <div className="year-selector" ref={yearSelector}>
+              {years.map((value) => (
                 <button
                   key={value}
                   type="button"
                   aria-label={`${value}年を表示`}
                   aria-pressed={year === value}
                   className={year === value ? 'active' : ''}
-                  onClick={() => {
-                    setPlaying(false)
-                    setYear(value)
-                  }}
+                  onClick={() => changeYear(value)}
                 >
                   <span className="year-tick" />
                   <span>{value}</span>
                 </button>
               ))}
-            </div>
-            <div className="timeline-source">
-              <span>国土交通省</span>
-              <span>
-                不動産情報ライブラリ
-                <MoveUpRight size={12} />
-              </span>
             </div>
           </div>
         </div>
@@ -575,6 +569,11 @@ export function App() {
         <h3>価格の読み方</h3>
         <p>
           公示地価は1月1日、基準地価は7月1日時点の土地1㎡あたりの価格です。マンション取引は土地の価格とは異なるため、直接比較できません。公表前の年度や対象地点のない範囲は空になります。
+        </p>
+        <p>
+          公示地価・前年比は{FIRST_YEAR.land}年、基準地価は{FIRST_YEAR.survey}年、マンション取引は
+          {FIRST_YEAR.transactions}
+          年から選べます。2005年の取引は7〜12月のみです。前年比は変動率が提供されている地点だけを表示します。
         </p>
         <p>
           マンション取引は中古マンション等の取引価格情報を使用します。各取引の総額を面積で割り、同じ最寄り駅の座標ごとに中央値を算出しています。面積が「以上」等で表された取引は計算から除きます。地点の高さや地図上の位置は、建物の高さや物件所在地を表しません。

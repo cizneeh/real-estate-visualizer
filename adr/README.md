@@ -10,6 +10,7 @@
 | [現行の地図をCloudflare Workersで公開する](0004-cloudflare-deployment.md) | 採用 |
 | [価格の棒を専用の3D描画レイヤーで表示する](0005-animated-price-columns.md) | 採用 |
 | [縮尺に応じて駅名を表示し、広域では主要駅を優先する](0006-station-label-priority.md) | 採用 |
+| [提供期間に合わせて過去の価格データを選択できるようにする](0007-historical-data-coverage.md) | 採用 |
 
 ## 記録する内容
 
