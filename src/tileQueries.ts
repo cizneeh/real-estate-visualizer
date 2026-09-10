@@ -1,7 +1,7 @@
 import { queryOptions } from '@tanstack/react-query'
 import { RequestQueue } from './requestQueue'
 import { type Tile, tileKey } from './tiles'
-import type { Dataset, TileResponse } from './types'
+import type { LegacyDataset, TileResponse } from './types'
 
 export class TileError extends Error {
   constructor(
@@ -13,11 +13,11 @@ export class TileError extends Error {
   }
 }
 
-export function sourceDataset(dataset: Dataset): Dataset {
+export function sourceDataset(dataset: LegacyDataset): LegacyDataset {
   return dataset === 'change' ? 'land' : dataset
 }
 
-export const priceTileKey = (dataset: Dataset, year: number, tile: Tile) =>
+export const priceTileKey = (dataset: LegacyDataset, year: number, tile: Tile) =>
   ['price-tile', sourceDataset(dataset), year, tileKey(tile)] as const
 
 export function createTileQueries(fetcher = fetch) {
@@ -29,7 +29,7 @@ export function createTileQueries(fetcher = fetch) {
       visible = new Set(keys)
       queue.pump()
     },
-    options(dataset: Dataset, year: number, tile: Tile) {
+    options(dataset: LegacyDataset, year: number, tile: Tile) {
       const queryKey = priceTileKey(dataset, year, tile)
       const priority = () => (visible.has(JSON.stringify(queryKey)) ? 0 : 1)
       return queryOptions<TileResponse, TileError>({

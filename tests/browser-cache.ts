@@ -137,7 +137,7 @@ try {
   await ready()
   assert.equal(foregroundCount(), beforeReturn)
   await expect(page.locator('.rank-row').first()).toContainText('2025年の地点')
-  await page.getByRole('button', { name: /地価の変化 公示地価の前年比/ }).click()
+  await page.getByRole('button', { name: '前年比（%）' }).click()
   await ready()
   assert.equal(foregroundCount(), beforeReturn)
   console.log(

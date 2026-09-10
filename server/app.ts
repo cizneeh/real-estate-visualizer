@@ -9,7 +9,7 @@ import {
   tileKey,
   tilesForBounds,
 } from '../src/tiles'
-import type { Bounds, DataResponse, Dataset, PricePoint, TileResponse } from '../src/types'
+import type { Bounds, DataResponse, LegacyDataset, PricePoint, TileResponse } from '../src/types'
 import { FIRST_YEAR, validYear } from '../src/years'
 import { browserCacheControl, type CacheStatus, type TileStore } from './cachePolicy'
 import { normalizePoint } from './data'
@@ -17,7 +17,7 @@ import { createTileStore, UpstreamError } from './tileStore'
 
 const BASE_URL = 'https://www.reinfolib.mlit.go.jp/ex-api/external/'
 
-function validDataset(value: string): value is Dataset {
+function validDataset(value: string): value is LegacyDataset {
   return ['land', 'survey', 'change', 'transactions'].includes(value)
 }
 
@@ -40,7 +40,7 @@ export function createApp(
   })
   app.get('/api/health', (c) => c.json({ configured: Boolean(getApiKey()) }))
   async function readTile(
-    dataset: Dataset,
+    dataset: LegacyDataset,
     year: number,
     tile: Tile,
     apiKey: string,
@@ -140,7 +140,7 @@ export function createApp(
     const response: DataResponse = {
       points: [],
       year,
-      dataset: dataset as Dataset,
+      dataset: dataset as LegacyDataset,
       fetchedAt: new Date().toISOString(),
       tiles: 0,
       failedTiles: 0,

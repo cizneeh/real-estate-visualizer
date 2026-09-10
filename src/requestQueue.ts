@@ -32,12 +32,11 @@ export class RequestQueue {
         start: () => {
           signal.removeEventListener('abort', cancel)
           this.active.add(job)
-          this.nextStart = Date.now() + this.interval
-          Promise.resolve()
-            .then(() => {
-              signal.throwIfAborted()
-              return task()
-            })
+          ;(async () => {
+            signal.throwIfAborted()
+            this.nextStart = Date.now() + this.interval
+            return task()
+          })()
             .then(resolve, reject)
             .finally(() => {
               this.active.delete(job)

@@ -1,8 +1,9 @@
 import { useEffect, useRef } from 'react'
-import type { Bounds, Dataset, PricePoint } from './types'
+import type { Bounds, Dataset, Metric, PricePoint } from './types'
 
 interface MapState {
   dataset: Dataset
+  metric: Metric
   year: number
   bounds?: Bounds
   loading: boolean
@@ -61,6 +62,9 @@ export function useMapTools(state: MapState) {
         return {
           status: 'ready',
           dataset: current.dataset,
+          metric: current.metric,
+          comparisonYears:
+            current.metric === 'change' ? [current.year - 1, current.year] : undefined,
           year: current.year,
           bounds: current.bounds,
           totalPoints: current.points.length,

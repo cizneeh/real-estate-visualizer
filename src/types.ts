@@ -1,9 +1,13 @@
-export type Dataset = 'land' | 'survey' | 'change' | 'transactions'
+export type Dataset = 'land' | 'survey' | 'transactions'
+export type LegacyDataset = Dataset | 'change'
+export type Metric = 'price' | 'change'
 export type ViewMode = '3d' | 'points' | 'heatmap'
 export type Bounds = [number, number, number, number]
 
 export interface PricePoint {
   id: string
+  historyId?: string
+  location?: string
   coordinates: [number, number]
   price: number
   change?: number
@@ -24,7 +28,7 @@ export interface PricePoint {
 export interface DataResponse {
   points: PricePoint[]
   year: number
-  dataset: Dataset
+  dataset: LegacyDataset
   fetchedAt: string
   tiles: number
   failedTiles: number

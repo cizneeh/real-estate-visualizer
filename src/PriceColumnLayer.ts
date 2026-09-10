@@ -14,7 +14,7 @@ import {
   type Vec3,
 } from './columnGeometry'
 import { colorFor } from './metrics'
-import type { Dataset, PricePoint } from './types'
+import type { Dataset, Metric, PricePoint } from './types'
 
 const ORIGIN = MercatorCoordinate.fromLngLat([138, 36])
 const STRIDE = 9
@@ -83,7 +83,7 @@ export class PriceColumnLayer implements CustomLayerInterface {
   private matrixUniform?: WebGLUniformLocation
   private matrix?: Float32Array
   private animation = new ColumnAnimation()
-  private dataset: Dataset = 'land'
+  private metric: Metric = 'price'
   private visible = false
   private selectedId?: string
   private hoveredId?: string
@@ -142,9 +142,15 @@ export class PriceColumnLayer implements CustomLayerInterface {
     gl.bindVertexArray(null)
   }
 
-  setData(points: PricePoint[], dataset: Dataset) {
-    this.dataset = dataset
-    this.animation.update(points, dataset, performance.now(), this.visible && !this.motion?.matches)
+  setData(points: PricePoint[], dataset: Dataset, metric: Metric) {
+    this.metric = metric
+    this.animation.update(
+      points,
+      dataset,
+      performance.now(),
+      this.visible && !this.motion?.matches,
+      metric,
+    )
     this.map?.triggerRepaint()
   }
 
@@ -223,7 +229,7 @@ export class PriceColumnLayer implements CustomLayerInterface {
       this.instances = new Float32Array(this.rendered.length * STRIDE)
     }
     for (const [index, column] of this.rendered.entries()) {
-      const color = colorFor(column.point, this.dataset)
+      const color = colorFor(column.point, this.metric)
       this.instances.set(
         [
           column.x,

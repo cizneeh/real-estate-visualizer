@@ -18,7 +18,8 @@
     "cf:dev": "npm run build && wrangler dev --port 8790",
     "deploy": "npm run build && wrangler deploy",
     "prelint": "npm run cf:types",
-    "prebuild": "npm run cf:types"
+    "prebuild": "npm run cf:types",
+    "test:e2e:point-history": "tsx tests/browser-point-history.ts"
   },
   "dependencies": {
     "@hono/node-server": "^2.1.1",

@@ -40,7 +40,9 @@ export function usePriceTiles(bounds: Bounds | undefined, dataset: Dataset, year
     ])
     void queryClient.cancelQueries({
       predicate: (query) =>
-        query.queryKey[0] === 'price-tile' && !wanted.has(JSON.stringify(query.queryKey)),
+        query.queryKey[0] === 'price-tile' &&
+        query.getObserversCount() === 0 &&
+        !wanted.has(JSON.stringify(query.queryKey)),
     })
   }, [requests, queryClient, keys, neighbors, dataset, year])
 
@@ -112,6 +114,7 @@ export function usePriceTiles(bounds: Bounds | undefined, dataset: Dataset, year
     loading: !bounds || results.loading,
     error: !results.loading && !results.data.length ? results.error : undefined,
     completed: results.completed,
+    requests,
     retry,
   }
 }

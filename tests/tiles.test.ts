@@ -62,13 +62,17 @@ test('parallel requests overlap, respect the limit, and prioritize visible work 
   await Promise.all(running)
 })
 
-test('start spacing does not serialize responses and aborted queued work never starts', async () => {
+test('start spacing does not serialize responses and aborted queued work never starts', {
+  timeout: 2000,
+}, async () => {
   const queue = new RequestQueue(3, 25)
   const starts: number[] = []
   const gate = deferred<void>()
+  const allStarted = deferred<void>()
   const jobs = Array.from({ length: 3 }, () =>
     queue.run(async () => {
       starts.push(Date.now())
+      if (starts.length === 3) allStarted.resolve()
       await gate.promise
     }, signal()),
   )
@@ -77,7 +81,7 @@ test('start spacing does not serialize responses and aborted queued work never s
   const rejected = assert.rejects(cancelled, { name: 'AbortError' })
   abort.abort()
   await rejected
-  await delay(90)
+  await allStarted.promise
   assert.equal(starts.length, 3)
   assert.ok(starts[1] - starts[0] >= 25)
   assert.ok(starts[2] - starts[1] >= 25)

@@ -1,6 +1,6 @@
 import type { Feature, Point } from 'geojson'
 import { inBounds } from '../src/tiles'
-import { type Dataset, JAPAN_BOUNDS, type PricePoint } from '../src/types'
+import { JAPAN_BOUNDS, type LegacyDataset, type PricePoint } from '../src/types'
 
 export { clipBounds, inBounds, tilesForBounds } from '../src/tiles'
 
@@ -30,7 +30,7 @@ function stringValue(value: unknown): string | undefined {
 
 export function normalizePoint(
   feature: Feature,
-  dataset: Dataset,
+  dataset: LegacyDataset,
   index: number | string,
 ): PricePoint | undefined {
   if (feature.geometry?.type !== 'Point') return undefined
@@ -63,6 +63,11 @@ export function normalizePoint(
   if (!price || price <= 0 || p.pause_flag === 1) return undefined
   return {
     id: `${p.land_price_type}-${p.point_id ?? p.standard_lot_number_ja ?? index}`,
+    historyId:
+      p.point_id === undefined || p.point_id === null
+        ? undefined
+        : `${p.land_price_type}-${p.point_id}`,
+    location: stringValue(p.location),
     coordinates,
     price,
     previousPrice: numberValue(p.last_years_price),

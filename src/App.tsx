@@ -25,6 +25,7 @@ import {
 } from 'lucide-react'
 import type { Map as LibreMap } from 'maplibre-gl'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { matchHistoryPoint, periodLabel } from './history'
 import { MapCanvas } from './MapCanvas'
 import {
   CHANGE_COLORS,
@@ -34,8 +35,15 @@ import {
   PRICE_COLORS,
   priceLabel,
 } from './metrics'
-import { PointDetails } from './PointDetails'
-import { type Bounds, type Dataset, JAPAN_BOUNDS, type PricePoint, type ViewMode } from './types'
+import { PointDetails, type PointSelection } from './PointDetails'
+import {
+  type Bounds,
+  type Dataset,
+  JAPAN_BOUNDS,
+  type Metric,
+  type PricePoint,
+  type ViewMode,
+} from './types'
 import { useCurrentLocation } from './useCurrentLocation'
 import { useMapTools } from './useMapTools'
 import { usePriceTiles } from './usePriceTiles'
@@ -44,7 +52,6 @@ import { FIRST_YEAR, LAST_YEAR, yearsForDataset } from './years'
 const DATASETS: { id: Dataset; name: string; description: string; icon: typeof MapPin }[] = [
   { id: 'land', name: '公示地価', description: '1月1日時点の土地の価格', icon: Layers3 },
   { id: 'survey', name: '基準地価', description: '7月1日時点の土地の価格', icon: MapPin },
-  { id: 'change', name: '地価の変化', description: '公示地価の前年比', icon: TrendingUp },
   {
     id: 'transactions',
     name: 'マンション取引',
@@ -56,14 +63,15 @@ const EMPTY_POINTS: PricePoint[] = []
 
 export function App() {
   const [dataset, setDataset] = useState<Dataset>('land')
+  const [metric, setMetric] = useState<Metric>('price')
   const [year, setYear] = useState(2025)
   const [mode, setMode] = useState<ViewMode>('3d')
   const [category, setCategory] = useState('すべて')
   const [bounds, setBounds] = useState<Bounds>()
-  const { data, loading, error, completed, retry } = usePriceTiles(bounds, dataset, year)
+  const { data, loading, error, completed, retry, requests } = usePriceTiles(bounds, dataset, year)
   const [map, setMap] = useState<LibreMap>()
   const [mapRendered, setMapRendered] = useState(false)
-  const [selectedId, setSelectedId] = useState<string>()
+  const [selection, setSelection] = useState<PointSelection>()
   const [playing, setPlaying] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const yearSelector = useRef<HTMLDivElement>(null)
@@ -72,13 +80,19 @@ export function App() {
   const infoDialog = useRef<HTMLDialogElement>(null)
   const { position, locating, error: locationError, locate } = useCurrentLocation()
   const handleBounds = useCallback((next: Bounds) => setBounds(next), [])
-  const handleSelect = useCallback((point: PricePoint) => setSelectedId(point.id), [])
+  const handleSelect = useCallback(
+    (point: PricePoint) => {
+      setSelection({ point, year })
+      setPlaying(false)
+    },
+    [year],
+  )
   const handleReady = useCallback((next: LibreMap) => setMap(next), [])
   const handleRendered = useCallback((ready: boolean) => setMapRendered(ready), [])
 
   useEffect(() => {
     if (!position) return
-    setSelectedId(undefined)
+    setSelection(undefined)
   }, [position])
 
   useEffect(() => {
@@ -108,11 +122,18 @@ export function App() {
     return rawPoints.filter(
       (point) =>
         (category === 'すべて' || point.category === category) &&
-        (dataset !== 'change' || point.change !== undefined),
+        (metric !== 'change' || point.change !== undefined),
     )
-  }, [rawPoints, dataset, category])
-  const selected = points.find((point) => point.id === selectedId)
-  useMapTools({ dataset, year, bounds, loading, error, points })
+  }, [rawPoints, dataset, metric, category])
+  const selected =
+    selection &&
+    (dataset === 'transactions'
+      ? points.find((point) => point.id === selection.point.id)
+      : (matchHistoryPoint(selection.point, points) ??
+        (year === selection.year
+          ? points.find((point) => point.id === selection.point.id)
+          : undefined)))
+  useMapTools({ dataset, metric, year, bounds, loading, error, points })
   const midpoint = median(points.map((point) => point.price))
   const medianChange = median(
     points.flatMap((point) => (point.change === undefined ? [] : [point.change])),
@@ -121,36 +142,36 @@ export function App() {
     () =>
       [...points]
         .sort((a, b) =>
-          dataset === 'change' ? (b.change ?? 0) - (a.change ?? 0) : b.price - a.price,
+          metric === 'change' ? (b.change ?? 0) - (a.change ?? 0) : b.price - a.price,
         )
         .slice(0, 5),
-    [points, dataset],
+    [points, metric],
   )
-  const metric = (point: PricePoint) =>
-    dataset === 'change' ? changeLabel(point.change) : priceLabel(point.price)
+  const formatMetric = (point: PricePoint) =>
+    metric === 'change' ? changeLabel(point.change) : priceLabel(point.price)
 
   function changeDataset(next: Dataset) {
     setDataset(next)
     setYear((value) => Math.max(FIRST_YEAR[next], value))
-    setSelectedId(undefined)
+    setSelection(undefined)
     setPlaying(false)
-    if (next === 'change' && mode === 'heatmap') setMode('points')
+    if (next === 'transactions') setMetric('price')
   }
 
   function changeYear(next: number) {
     setPlaying(false)
-    setSelectedId(undefined)
     setYear(next)
   }
 
   function showJapan() {
-    setSelectedId(undefined)
+    setSelection(undefined)
     setSidebarOpen(false)
     map?.fitBounds(JAPAN_BOUNDS, { padding: 40, pitch: 0, bearing: 0, duration: 1200 })
   }
 
   function focusPoint(point: PricePoint) {
-    setSelectedId(point.id)
+    handleSelect(point)
+    setSidebarOpen(false)
     map?.easeTo({ center: point.coordinates, duration: 800 })
   }
 
@@ -203,6 +224,43 @@ export function App() {
             </div>
           </section>
 
+          <section className="metric-section" aria-labelledby="metric-title">
+            <div className="section-heading">
+              <h3 id="metric-title">表示する指標</h3>
+              <TrendingUp size={14} />
+            </div>
+            <div className="segmented metric-controls">
+              {(
+                [
+                  { id: 'price', label: '価格' },
+                  { id: 'change', label: '前年比（%）' },
+                ] as const
+              ).map(({ id, label }) => (
+                <button
+                  key={id}
+                  type="button"
+                  aria-pressed={metric === id}
+                  className={metric === id ? 'active' : ''}
+                  disabled={id === 'change' && dataset === 'transactions'}
+                  onClick={() => {
+                    setMetric(id)
+                    setPlaying(false)
+                    if (id === 'change' && mode === 'heatmap') setMode('points')
+                  }}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+            <p className="metric-description">
+              {dataset === 'transactions'
+                ? '駅周辺の取引単価の中央値。前年比は未対応です。'
+                : metric === 'change'
+                  ? `${year - 1}年から${year}年への価格の変化率`
+                  : '選択した年の土地1㎡あたりの価格'}
+            </p>
+          </section>
+
           {dataset !== 'transactions' && (
             <section className="category-section" aria-labelledby="category-title">
               <div className="section-heading">
@@ -218,7 +276,7 @@ export function App() {
                     className={category === value ? 'active' : ''}
                     onClick={() => {
                       setCategory(value)
-                      setSelectedId(undefined)
+                      setSelection(undefined)
                     }}
                   >
                     {value}
@@ -243,8 +301,8 @@ export function App() {
               </span>
             </div>
             <div className="big-metric">
-              {dataset === 'change' ? changeLabel(medianChange) : priceLabel(midpoint)}
-              {dataset !== 'change' && <small>万円 / ㎡</small>}
+              {metric === 'change' ? changeLabel(medianChange) : priceLabel(midpoint)}
+              {metric !== 'change' && <small>万円 / ㎡</small>}
             </div>
             <div className="summary-foot">
               {dataset === 'transactions' ? (
@@ -266,7 +324,7 @@ export function App() {
           <section className="ranking" aria-labelledby="ranking-title">
             <div className="section-heading">
               <h3 id="ranking-title">
-                {dataset === 'change'
+                {metric === 'change'
                   ? '表示領域の中で上昇率の高い地点'
                   : '表示領域の中で価格の高い地点'}
               </h3>
@@ -285,7 +343,7 @@ export function App() {
                     <small>{point.station ? `${point.station}駅周辺` : point.category}</small>
                   </span>
                   <span className="rank-value">
-                    {metric(point)}
+                    {formatMetric(point)}
                     <ArrowUpRight size={13} />
                   </span>
                 </button>
@@ -310,10 +368,14 @@ export function App() {
         </footer>
       </aside>
 
-      <section className="map-workspace" aria-label="マップで探索">
+      <section
+        className={`map-workspace ${selection ? 'has-selection' : ''}`}
+        aria-label="マップで探索"
+      >
         <MapCanvas
           points={points}
           dataset={dataset}
+          metric={metric}
           mode={mode}
           position={position}
           selectedId={selected?.id}
@@ -352,11 +414,11 @@ export function App() {
                 key={id}
                 type="button"
                 title={
-                  id === 'heatmap' && dataset === 'change'
+                  id === 'heatmap' && metric === 'change'
                     ? '前年比は3Dまたはポイントで表示します'
                     : `${label}表示`
                 }
-                disabled={id === 'heatmap' && dataset === 'change'}
+                disabled={id === 'heatmap' && metric === 'change'}
                 aria-pressed={mode === id}
                 className={mode === id ? 'active' : ''}
                 onClick={() => setMode(id)}
@@ -368,13 +430,16 @@ export function App() {
           </fieldset>
         </div>
 
-        {selected && (
+        {selection && (
           <PointDetails
-            key={`${dataset}-${year}-${selected.id}`}
-            point={selected}
+            key={`${dataset}-${selection.point.id}`}
+            selection={selection}
+            currentPoint={selected}
+            loading={loading}
+            requests={requests}
             dataset={dataset}
             year={year}
-            onClose={() => setSelectedId(undefined)}
+            onClose={() => setSelection(undefined)}
           />
         )}
 
@@ -395,26 +460,26 @@ export function App() {
               <div id="map-legend" className="legend-content">
                 <div className="legend-title">
                   <span>
-                    {dataset === 'change'
+                    {metric === 'change'
                       ? '対前年変動率'
                       : mode === 'heatmap'
                         ? '価格で重み付けした密度'
                         : '㎡あたりの価格'}
                   </span>
                   <small>
-                    {mode === 'heatmap' ? '相対値' : dataset === 'change' ? '%' : '万円 / ㎡'}
+                    {mode === 'heatmap' ? '相対値' : metric === 'change' ? '%' : '万円 / ㎡'}
                   </small>
                 </div>
                 <div
                   className="legend-gradient"
                   style={{
-                    background: `linear-gradient(90deg, ${(dataset === 'change' ? CHANGE_COLORS : PRICE_COLORS).join(',')})`,
+                    background: `linear-gradient(90deg, ${(metric === 'change' ? CHANGE_COLORS : PRICE_COLORS).join(',')})`,
                   }}
                 />
                 <div className="legend-labels">
                   {(mode === 'heatmap'
                     ? ['低い', '高い']
-                    : dataset === 'change'
+                    : metric === 'change'
                       ? ['−5', '0', '2', '5', '10', '20+']
                       : ['0', '30', '70', '150', '500', '1,500+']
                   ).map((label) => (
@@ -423,7 +488,7 @@ export function App() {
                 </div>
                 {mode === '3d' && (
                   <p>
-                    {dataset === 'change'
+                    {metric === 'change'
                       ? '高さは変動率の絶対値、色は増減を表します'
                       : '高さは価格の平方根に比例（上限6,500m）'}
                   </p>
@@ -504,48 +569,54 @@ export function App() {
               <Globe2 size={17} />
             </button>
           </div>
-          <div className="timeline">
-            <label className="timeline-label">
-              <span>観測年</span>
-              <select
-                aria-label="観測年"
-                value={year}
-                onChange={(event) => changeYear(Number(event.target.value))}
-              >
-                {years.map((value) => (
-                  <option key={value} value={value}>
-                    {value}年
-                  </option>
-                ))}
-              </select>
-            </label>
-            <button
-              type="button"
-              className={`play-button ${playing ? 'playing' : ''}`}
-              aria-label={playing ? '年度の自動再生を停止' : '年度を自動再生'}
-              aria-pressed={playing}
-              onClick={() => setPlaying(!playing)}
-            >
-              {playing ? (
-                <Pause size={16} fill="currentColor" />
-              ) : (
-                <Play size={16} fill="currentColor" />
-              )}
-            </button>
-            <div className="year-selector" ref={yearSelector}>
-              {years.map((value) => (
-                <button
-                  key={value}
-                  type="button"
-                  aria-label={`${value}年を表示`}
-                  aria-pressed={year === value}
-                  className={year === value ? 'active' : ''}
-                  onClick={() => changeYear(value)}
+          <div className="timeline-group">
+            <p className="timeline-period" aria-live="polite">
+              {periodLabel(dataset, metric, year)}
+            </p>
+            <div className="timeline">
+              <label className="timeline-label">
+                <span>対象年</span>
+                <select
+                  aria-label="対象年"
+                  value={year}
+                  onChange={(event) => changeYear(Number(event.target.value))}
                 >
-                  <span className="year-tick" />
-                  <span>{value}</span>
-                </button>
-              ))}
+                  {years.map((value) => (
+                    <option key={value} value={value}>
+                      {value}年
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <button
+                type="button"
+                className={`play-button ${playing ? 'playing' : ''}`}
+                aria-label={playing ? '年度の自動再生を停止' : '年度を自動再生'}
+                aria-pressed={playing}
+                onClick={() => setPlaying(!playing)}
+              >
+                {playing ? (
+                  <Pause size={16} fill="currentColor" />
+                ) : (
+                  <Play size={16} fill="currentColor" />
+                )}
+              </button>
+              <div className="year-selector" ref={yearSelector}>
+                {years.map((value) => (
+                  <button
+                    key={value}
+                    type="button"
+                    aria-label={`${value}年を表示`}
+                    title={periodLabel(dataset, metric, value)}
+                    aria-pressed={year === value}
+                    className={year === value ? 'active' : ''}
+                    onClick={() => changeYear(value)}
+                  >
+                    <span className="year-tick" />
+                    <span>{value}</span>
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
         </div>
@@ -577,6 +648,10 @@ export function App() {
         </p>
         <p>
           マンション取引は中古マンション等の取引価格情報を使用します。各取引の総額を面積で割り、同じ最寄り駅の座標ごとに中央値を算出しています。面積が「以上」等で表された取引は計算から除きます。地点の高さや地図上の位置は、建物の高さや物件所在地を表しません。
+        </p>
+        <h3>地点の価格推移</h3>
+        <p>
+          公示地価・基準地価の地点を選ぶと、対象年までの価格推移を表示します。初期表示は5年前からで、10年前から・全期間に切り替えられます。識別番号・所在地・位置から同じ地点と確認できた年のみ表示し、欠測や地点変更の前後は線をつなぎません。推移は選んだ地点周辺のデータから取得します。マンション取引の推移は未対応です。
         </p>
         <h3>集計と可視化</h3>
         <p>

@@ -1,5 +1,5 @@
 import { columnHeight } from './metrics'
-import type { Dataset, PricePoint } from './types'
+import type { Dataset, Metric, PricePoint } from './types'
 
 export const GROW_DURATION = 700
 
@@ -19,11 +19,17 @@ export class ColumnAnimation {
   columns: AnimatedColumn[] = []
   private history = new Map<string, AnimatedColumn>()
 
-  update(points: PricePoint[], dataset: Dataset, now: number, animate: boolean) {
+  update(
+    points: PricePoint[],
+    dataset: Dataset,
+    now: number,
+    animate: boolean,
+    metric: Metric = 'price',
+  ) {
     this.columns = points.map((point) => {
-      const key = `${dataset}:${point.id}`
+      const key = `${dataset}:${metric}:${point.id}`
       const previous = this.history.get(key)
-      const to = columnHeight(point, dataset)
+      const to = columnHeight(point, metric)
       let column: AnimatedColumn
       if (previous?.to === to) {
         column = { ...previous, point }

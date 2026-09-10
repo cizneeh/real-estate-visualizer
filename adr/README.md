@@ -12,6 +12,7 @@
 | [縮尺に応じて駅名を表示し、広域では主要駅を優先する](0006-station-label-priority.md) | 採用 |
 | [提供期間に合わせて過去の価格データを選択できるようにする](0007-historical-data-coverage.md) | 採用 |
 | [公開APIを継続利用し、共有キャッシュから価格を返す](0008-shared-price-cache.md) | 採用 |
+| [データ種別と表示指標を分け、選択地点の価格推移を必要時に取得する](0009-point-price-history.md) | 採用 |
 
 ## 記録する内容
 

@@ -48,6 +48,10 @@ test('returning to a cached point keeps its height and datasets do not share tra
   assert.equal(animatedHeight(animation.columns[0], 1200), 900)
   animation.update([point('a')], 'survey', 1300, true)
   assert.equal(animatedHeight(animation.columns[0], 1300), 0)
+  animation.update([{ ...point('a'), change: -5 }], 'survey', 1400, false, 'change')
+  assert.equal(animatedHeight(animation.columns[0], 1400), 555)
+  animation.update([point('a')], 'land', 1500, true)
+  assert.equal(animatedHeight(animation.columns[0], 1500), 900)
 })
 
 test('reduced motion and hidden modes settle heights without overshoot', () => {
@@ -62,7 +66,7 @@ test('reduced motion and hidden modes settle heights without overshoot', () => {
   animation.finish()
   assert.equal(animation.isAnimating(100), false)
   assert.equal(animatedHeight(animation.columns[0], 100), 900)
-  assert.equal(columnHeight(point('max', 100_000_000), 'land'), 6500)
+  assert.equal(columnHeight(point('max', 100_000_000), 'price'), 6500)
 })
 
 test('hexagonal column faces have finite outward normals and flat, level tops', () => {
