@@ -18,5 +18,6 @@ export function yearsForDataset(dataset: Dataset) {
 }
 
 export function validYear(dataset: Dataset, year: number) {
-  return Number.isInteger(year) && year >= FIRST_YEAR[dataset] && year <= LAST_YEAR
+  // Workers initializes module-level dates at the Unix epoch; read the year during the request.
+  return Number.isInteger(year) && year >= FIRST_YEAR[dataset] && year <= new Date().getFullYear()
 }
