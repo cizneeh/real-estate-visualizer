@@ -1,7 +1,7 @@
-import type { Dataset } from './types'
+import type { LegacyDataset } from './types'
 
 // Source: https://www.reinfolib.mlit.go.jp/help/apiManual/
-export const FIRST_YEAR: Record<Dataset, number> = {
+export const FIRST_YEAR: Record<LegacyDataset, number> = {
   land: 1995,
   change: 1995,
   survey: 1997,
@@ -10,14 +10,14 @@ export const FIRST_YEAR: Record<Dataset, number> = {
 
 export const LAST_YEAR = new Date().getFullYear()
 
-export function yearsForDataset(dataset: Dataset) {
+export function yearsForDataset(dataset: LegacyDataset) {
   return Array.from(
     { length: LAST_YEAR - FIRST_YEAR[dataset] + 1 },
     (_, i) => FIRST_YEAR[dataset] + i,
   )
 }
 
-export function validYear(dataset: Dataset, year: number) {
+export function validYear(dataset: LegacyDataset, year: number) {
   // Workers initializes module-level dates at the Unix epoch; read the year during the request.
   return Number.isInteger(year) && year >= FIRST_YEAR[dataset] && year <= new Date().getFullYear()
 }

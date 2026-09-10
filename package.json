@@ -12,12 +12,14 @@
     "test": "tsx --test tests/*.test.ts",
     "test:e2e": "tsx tests/browser.ts",
     "test:e2e:cache": "tsx tests/browser-cache.ts",
+    "test:e2e:shared-cache": "tsx tests/browser-shared-cache.ts",
     "test:e2e:history": "tsx tests/browser-history.ts",
     "cf:types": "wrangler types --include-runtime=false",
     "cf:dev": "npm run build && wrangler dev --port 8790",
     "deploy": "npm run build && wrangler deploy",
     "prelint": "npm run cf:types",
-    "prebuild": "npm run cf:types"
+    "prebuild": "npm run cf:types",
+    "test:e2e:point-history": "tsx tests/browser-point-history.ts"
   },
   "dependencies": {
     "@hono/node-server": "^2.1.1",

@@ -4,13 +4,15 @@
 
 | ADR | 状態 |
 | --- | --- |
-| [タイル単位で価格データを取得し、ブラウザとサーバーでキャッシュする](0001-tile-loading-and-cache.md) | 一部置換済み（0004） |
+| [タイル単位で価格データを取得し、ブラウザとサーバーでキャッシュする](0001-tile-loading-and-cache.md) | 一部置換済み（0004、0008） |
 | [取得を制限付きで並列化し、表示範囲を先読みより優先する](0002-request-scheduling-and-prefetch.md) | 一部置換済み（0004） |
 | [位置情報の取得に依存せず、東京周辺から探索を始められるようにする](0003-location-independent-initial-view.md) | 採用 |
-| [現行の地図をCloudflare Workersで公開する](0004-cloudflare-deployment.md) | 採用 |
+| [現行の地図をCloudflare Workersで公開する](0004-cloudflare-deployment.md) | 一部置換済み（0008） |
 | [価格の棒を専用の3D描画レイヤーで表示する](0005-animated-price-columns.md) | 採用 |
 | [縮尺に応じて駅名を表示し、広域では主要駅を優先する](0006-station-label-priority.md) | 採用 |
 | [提供期間に合わせて過去の価格データを選択できるようにする](0007-historical-data-coverage.md) | 採用 |
+| [公開APIを継続利用し、共有キャッシュから価格を返す](0008-shared-price-cache.md) | 採用 |
+| [データ種別と表示指標を分け、選択地点の価格推移を必要時に取得する](0009-point-price-history.md) | 採用 |
 
 ## 記録する内容
 

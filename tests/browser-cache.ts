@@ -35,7 +35,7 @@ await page.route('**/api/tiles/**', async (route) => {
   const url = new URL(route.request().url())
   const key = url.pathname.slice('/api/tiles/'.length)
   const year = url.searchParams.get('year') ?? ''
-  const priority = url.searchParams.get('priority') ?? ''
+  const priority = route.request().headers()['x-price-priority'] ?? ''
   const dataset = url.searchParams.get('dataset') ?? ''
   requests.push({ key, year, priority, dataset })
   active++
@@ -137,7 +137,7 @@ try {
   await ready()
   assert.equal(foregroundCount(), beforeReturn)
   await expect(page.locator('.rank-row').first()).toContainText('2025年の地点')
-  await page.getByRole('button', { name: /地価の変化 公示地価の前年比/ }).click()
+  await page.getByRole('button', { name: '前年比（%）' }).click()
   await ready()
   assert.equal(foregroundCount(), beforeReturn)
   console.log(

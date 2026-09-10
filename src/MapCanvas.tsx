@@ -5,7 +5,14 @@ import { useEffect, useRef, useState } from 'react'
 import { configureBasemap } from './mapStyle'
 import { PRICE_COLORS, pointCollection } from './metrics'
 import { PriceColumnLayer } from './PriceColumnLayer'
-import { type Bounds, type Dataset, JAPAN_BOUNDS, type PricePoint, type ViewMode } from './types'
+import {
+  type Bounds,
+  type Dataset,
+  JAPAN_BOUNDS,
+  type Metric,
+  type PricePoint,
+  type ViewMode,
+} from './types'
 import 'maplibre-gl/dist/maplibre-gl.css'
 
 maplibregl.setWorkerUrl(workerUrl)
@@ -15,6 +22,7 @@ const TOKYO_CENTER: [number, number] = [139.7671, 35.6812]
 interface Props {
   points: PricePoint[]
   dataset: Dataset
+  metric: Metric
   mode: ViewMode
   position?: [number, number]
   selectedId?: string
@@ -73,7 +81,7 @@ export function MapCanvas(props: Props) {
       ])
     }
     map.on('load', () => {
-      map.addSource('prices', { type: 'geojson', data: pointCollection([], 'land') })
+      map.addSource('prices', { type: 'geojson', data: pointCollection([], 'price') })
       map.addLayer({
         id: 'price-heat',
         type: 'heatmap',
@@ -133,7 +141,7 @@ export function MapCanvas(props: Props) {
       map.on('webglcontextrestored', () => {
         map.once('style.load', () => {
           if (!map.getLayer(columns.id)) map.addLayer(columns, 'station-labels')
-          columns.setData(latest.current.points, latest.current.dataset)
+          columns.setData(latest.current.points, latest.current.dataset, latest.current.metric)
           columns.setVisible(latest.current.mode === '3d')
           columns.setSelected(latest.current.selectedId)
         })
@@ -182,16 +190,14 @@ export function MapCanvas(props: Props) {
     if (!map || !ready || !map.getSource('prices')) return
     container.current?.setAttribute('data-rendered', 'false')
     latest.current.onRendered(false)
-    ;(map.getSource('prices') as GeoJSONSource).setData(
-      pointCollection(props.points, props.dataset),
-    )
-    columnsRef.current?.setData(props.points, props.dataset)
-  }, [props.points, props.dataset, ready])
+    ;(map.getSource('prices') as GeoJSONSource).setData(pointCollection(props.points, props.metric))
+    columnsRef.current?.setData(props.points, props.dataset, props.metric)
+  }, [props.points, props.dataset, props.metric, ready])
 
   useEffect(() => {
     const map = mapRef.current
     if (!map || !ready) return
-    const heat = props.mode === 'heatmap' && props.dataset !== 'change'
+    const heat = props.mode === 'heatmap' && props.metric !== 'change'
     columnsRef.current?.setVisible(props.mode === '3d')
     map.setLayoutProperty('price-points', 'visibility', props.mode === '3d' ? 'none' : 'visible')
     map.setLayoutProperty('price-glow', 'visibility', props.mode === '3d' ? 'none' : 'visible')
@@ -200,7 +206,7 @@ export function MapCanvas(props: Props) {
     const pitch = props.mode === '3d' ? 48 : 0
     const duration = window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 700
     if (Math.abs(map.getPitch() - pitch) > 0.1) map.easeTo({ pitch, duration })
-  }, [props.mode, props.dataset, ready])
+  }, [props.mode, props.metric, ready])
 
   useEffect(() => {
     if (!ready) return

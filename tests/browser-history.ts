@@ -34,7 +34,7 @@ await page.route('**/api/tiles/**', async (route) => {
   })
 })
 
-const select = page.getByRole('combobox', { name: '観測年' })
+const select = page.getByRole('combobox', { name: '対象年' })
 async function ready(year: number) {
   await expect(select).toHaveValue(String(year))
   await expect(page.getByRole('status')).toContainText('地点を表示中')
@@ -49,7 +49,7 @@ try {
   await select.selectOption('1995')
   await ready(1995)
   await expect(select.locator('option').first()).toHaveValue('1995')
-  await page.getByRole('button', { name: /地価の変化 公示地価の前年比/ }).click()
+  await page.getByRole('button', { name: '前年比（%）' }).click()
   await ready(1995)
   await page.getByRole('button', { name: /基準地価 7月1日時点/ }).click()
   await ready(1997)

@@ -1,5 +1,5 @@
 import type { FeatureCollection, Point } from 'geojson'
-import type { Dataset, PricePoint } from './types'
+import type { Metric, PricePoint } from './types'
 
 export const PRICE_COLORS = ['#568faf', '#6a93cd', '#998ddd', '#c793d2', '#ea95af', '#ff877d']
 export const PRICE_STOPS = [0, 300_000, 700_000, 1_500_000, 5_000_000, 15_000_000]
@@ -44,16 +44,16 @@ export function groupTransactions(points: PricePoint[]): PricePoint[] {
   }))
 }
 
-export function colorFor(point: PricePoint, dataset: Dataset) {
-  const value = dataset === 'change' ? (point.change ?? 0) : point.price
-  const stops = dataset === 'change' ? CHANGE_STOPS : PRICE_STOPS
-  const colors = dataset === 'change' ? CHANGE_COLORS : PRICE_COLORS
+export function colorFor(point: PricePoint, metric: Metric) {
+  const value = metric === 'change' ? (point.change ?? 0) : point.price
+  const stops = metric === 'change' ? CHANGE_STOPS : PRICE_STOPS
+  const colors = metric === 'change' ? CHANGE_COLORS : PRICE_COLORS
   let index = 0
   for (let i = 0; i < stops.length; i++) if (value >= stops[i]) index = i
   return colors[index]
 }
 
-export function pointCollection(points: PricePoint[], dataset: Dataset): FeatureCollection<Point> {
+export function pointCollection(points: PricePoint[], metric: Metric): FeatureCollection<Point> {
   return {
     type: 'FeatureCollection',
     features: points.map((point) => ({
@@ -64,14 +64,14 @@ export function pointCollection(points: PricePoint[], dataset: Dataset): Feature
         id: point.id,
         price: point.price,
         change: point.change,
-        color: colorFor(point, dataset),
+        color: colorFor(point, metric),
       },
     })),
   }
 }
 
-export function columnHeight(point: PricePoint, dataset: Dataset): number {
-  return dataset === 'change'
+export function columnHeight(point: PricePoint, metric: Metric): number {
+  return metric === 'change'
     ? 80 + Math.abs(point.change ?? 0) * 95
     : Math.min(6500, Math.sqrt(point.price) * 0.9)
 }

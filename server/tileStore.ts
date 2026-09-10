@@ -3,13 +3,7 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { Feature, FeatureCollection } from 'geojson'
 import { RequestQueue } from '../src/requestQueue'
-
-export const CACHE_TTL = 24 * 60 * 60 * 1000
-
-interface CacheEntry {
-  at: number
-  features: Feature[]
-}
+import { type CacheEntry, cacheState } from './cachePolicy'
 
 interface PendingTile {
   controller: AbortController
@@ -37,14 +31,17 @@ export function createTileStore({
   directory = '.cache/tiles',
   concurrency = 4,
   interval = 200,
+  now = Date.now,
 }: {
   fetcher?: typeof fetch
   directory?: string
   concurrency?: number
   interval?: number
+  now?: () => number
 } = {}) {
   const memory = new Map<string, CacheEntry>()
   const pending = new Map<string, PendingTile>()
+  const diskReads = new Map<string, Promise<CacheEntry | undefined>>()
   const queue = new RequestQueue(concurrency, interval, Math.min(2, concurrency))
   let backoff: { until: number; status: number } | undefined
 
@@ -60,14 +57,6 @@ export function createTileStore({
 
   async function load(key: string, url: string, apiKey: string, job: PendingTile) {
     const file = join(directory, `${key}.json`)
-    try {
-      const disk = JSON.parse(await readFile(file, 'utf8')) as CacheEntry
-      if (Date.now() - disk.at < CACHE_TTL && Array.isArray(disk.features)) {
-        return remember(key, disk)
-      }
-    } catch {
-      /* A cache miss is normal; request the public dataset from the API. */
-    }
     const signal = job.controller.signal
     return queue.run(
       async () => {
@@ -101,7 +90,7 @@ export function createTileStore({
           if (!backoff || until > backoff.until) backoff = { until, status }
           throw new UpstreamError(status, retryAfter)
         }
-        const entry = remember(key, { at: Date.now(), features })
+        const entry = remember(key, { at: now(), features })
         try {
           await mkdir(directory, { recursive: true })
           await writeFile(file, JSON.stringify(entry))
@@ -115,7 +104,7 @@ export function createTileStore({
     )
   }
 
-  function get(
+  function fetchFresh(
     url: string,
     apiKey: string,
     signal: AbortSignal,
@@ -123,10 +112,6 @@ export function createTileStore({
   ): Promise<CacheEntry> {
     if (signal.aborted) return Promise.reject(signal.reason)
     const key = createHash('sha256').update(url).digest('hex')
-    const cached = memory.get(key)
-    if (cached && Date.now() - cached.at < CACHE_TTL) {
-      return Promise.resolve(remember(key, cached))
-    }
     let job = pending.get(key)
     if (!job || job.controller.signal.aborted) {
       const next: PendingTile = {
@@ -167,6 +152,47 @@ export function createTileStore({
         },
       )
     })
+  }
+
+  async function get(url: string, apiKey: string, signal: AbortSignal, priority = 0) {
+    signal.throwIfAborted()
+    const key = createHash('sha256').update(url).digest('hex')
+    let cached = memory.get(key)
+    if (!cached && pending.has(key))
+      return { ...(await fetchFresh(url, apiKey, signal, priority)), cacheStatus: 'MISS' as const }
+    if (!cached) {
+      let reading = diskReads.get(key)
+      if (!reading) {
+        reading = (async () => {
+          try {
+            const disk = JSON.parse(
+              await readFile(join(directory, `${key}.json`), 'utf8'),
+            ) as CacheEntry
+            if (Number.isFinite(disk.at) && Array.isArray(disk.features)) return remember(key, disk)
+          } catch {
+            /* A cache miss is normal; request the public dataset from the API. */
+          }
+          return undefined
+        })()
+        diskReads.set(key, reading)
+        void reading.finally(() => diskReads.delete(key))
+      }
+      cached = await reading
+    }
+    signal.throwIfAborted()
+    if (cached) {
+      const state = cacheState(url, cached, now())
+      if (state === 'fresh') return { ...remember(key, cached), cacheStatus: 'HIT' as const }
+      if (state === 'stale') {
+        if (!pending.has(key) && (!backoff || Date.now() >= backoff.until)) {
+          void fetchFresh(url, apiKey, AbortSignal.timeout(25_000), 1).catch(() => {
+            console.warn('Tile refresh failed; serving the previously fetched data.')
+          })
+        }
+        return { ...cached, cacheStatus: 'STALE' as const }
+      }
+    }
+    return { ...(await fetchFresh(url, apiKey, signal, priority)), cacheStatus: 'MISS' as const }
   }
 
   return { get }

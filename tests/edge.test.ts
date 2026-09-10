@@ -45,7 +45,9 @@ test('separate Worker requests reuse cached empty tiles without caching credenti
   await Promise.all(writes)
   const second = await createEdgeTileStore(options).get(url, 'server-only-secret', signal, 1)
   assert.equal(calls, 1)
-  assert.deepEqual(second, first)
+  assert.equal(first.cacheStatus, 'MISS')
+  assert.equal(second.cacheStatus, 'HIT')
+  assert.equal(second.at, first.at)
   assert.deepEqual(second.features, [])
   for (const [key, response] of entries) {
     assert.equal(key.includes('server-only-secret'), false)
