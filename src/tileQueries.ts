@@ -34,7 +34,7 @@ export function createTileQueries(fetcher = fetch) {
       const priority = () => (visible.has(JSON.stringify(queryKey)) ? 0 : 1)
       return queryOptions<TileResponse, TileError>({
         queryKey,
-        staleTime: 30 * 60 * 1000,
+        staleTime: (query) => (query.state.data?.stale ? 0 : 30 * 60 * 1000),
         gcTime: 60 * 60 * 1000,
         refetchOnWindowFocus: false,
         retry: (count, error) => count < 1 && error.status >= 500,
@@ -45,9 +45,11 @@ export function createTileQueries(fetcher = fetch) {
               const params = new URLSearchParams({
                 dataset: sourceDataset(dataset),
                 year: String(year),
-                priority: priority() === 0 ? 'visible' : 'background',
               })
-              const response = await fetcher(`/api/tiles/${tileKey(tile)}?${params}`, { signal })
+              const response = await fetcher(`/api/tiles/${tileKey(tile)}?${params}`, {
+                signal,
+                headers: { 'X-Price-Priority': priority() === 0 ? 'visible' : 'background' },
+              })
               const result = await response.json()
               if (!response.ok) {
                 throw new TileError(

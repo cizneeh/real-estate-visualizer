@@ -8,7 +8,8 @@ import { setTimeout as delay } from 'node:timers/promises'
 import { QueryClient } from '@tanstack/react-query'
 import type { Feature } from 'geojson'
 import { createApp } from '../server/app'
-import { CACHE_TTL, createTileStore, UpstreamError } from '../server/tileStore'
+import { HOUR } from '../server/cachePolicy'
+import { createTileStore, UpstreamError } from '../server/tileStore'
 import { RequestQueue } from '../src/requestQueue'
 import { createTileQueries, priceTileKey } from '../src/tileQueries'
 import { surroundingTiles, tileAt, tileBounds, tileKey, tilesForBounds } from '../src/tiles'
@@ -140,7 +141,7 @@ test('tile store cancels unused upstream work and allows a fresh request for tha
   assert.equal(calls, 2)
 })
 
-test('disk cache survives a new store, caches empty tiles, and expires after 24 hours', async (t) => {
+test('disk cache survives a new store and empty tiles expire after an hour', async (t) => {
   const directory = await mkdtemp(join(tmpdir(), 'price-tiles-'))
   t.after(() => rm(directory, { recursive: true, force: true }))
   let calls = 0
@@ -155,12 +156,15 @@ test('disk cache survives a new store, caches empty tiles, and expires after 24 
   const url = 'https://example.test/tile'
   const initial = await createTileStore(options).get(url, 'secret', signal())
   const cached = await createTileStore(options).get(url, 'secret', signal())
-  assert.deepEqual(initial, cached)
+  assert.equal(initial.cacheStatus, 'MISS')
+  assert.equal(cached.cacheStatus, 'HIT')
+  assert.equal(initial.at, cached.at)
+  assert.deepEqual(initial.features, cached.features)
   assert.equal(calls, 1)
   const key = createHash('sha256').update(url).digest('hex')
   await writeFile(
     join(directory, `${key}.json`),
-    JSON.stringify({ at: Date.now() - CACHE_TTL - 1, features: [] }),
+    JSON.stringify({ at: Date.now() - HOUR - 1, features: [] }),
   )
   await createTileStore(options).get(url, 'secret', signal())
   assert.equal(calls, 2)

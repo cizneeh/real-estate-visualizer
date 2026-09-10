@@ -11,6 +11,7 @@ import {
 } from '../src/tiles'
 import type { Bounds, DataResponse, Dataset, PricePoint, TileResponse } from '../src/types'
 import { FIRST_YEAR, validYear } from '../src/years'
+import { browserCacheControl, type CacheStatus, type TileStore } from './cachePolicy'
 import { normalizePoint } from './data'
 import { createTileStore, UpstreamError } from './tileStore'
 
@@ -20,9 +21,13 @@ function validDataset(value: string): value is Dataset {
   return ['land', 'survey', 'change', 'transactions'].includes(value)
 }
 
-export function createApp(getApiKey: () => string | undefined, store = createTileStore()) {
+export function createApp(
+  getApiKey: () => string | undefined,
+  store: TileStore = createTileStore(),
+) {
   const app = new Hono()
   app.use('/api/*', async (c, next) => {
+    c.header('Cache-Control', 'no-store')
     const origin = c.req.header('Origin')
     if (
       origin &&
@@ -31,7 +36,6 @@ export function createApp(getApiKey: () => string | undefined, store = createTil
     ) {
       return c.json({ error: 'このAPIはアプリと同じサイトから利用してください。' }, 403)
     }
-    c.header('Cache-Control', 'no-store')
     await next()
   })
   app.get('/api/health', (c) => c.json({ configured: Boolean(getApiKey()) }))
@@ -42,7 +46,7 @@ export function createApp(getApiKey: () => string | undefined, store = createTil
     apiKey: string,
     signal: AbortSignal,
     priority = 0,
-  ): Promise<TileResponse> {
+  ): Promise<TileResponse & { cacheControl: string; cacheStatus?: CacheStatus }> {
     const params = new URLSearchParams({
       response_format: 'geojson',
       z: String(tile.z),
@@ -66,7 +70,13 @@ export function createApp(getApiKey: () => string | undefined, store = createTil
       if (point && tileKey(tileAt(point.coordinates, tile.z)) === tileKey(tile))
         points.set(point.id, point)
     })
-    return { points: [...points.values()], fetchedAt: new Date(entry.at).toISOString() }
+    return {
+      points: [...points.values()],
+      fetchedAt: new Date(entry.at).toISOString(),
+      ...(entry.cacheStatus === 'STALE' ? { stale: true } : {}),
+      cacheControl: browserCacheControl(url, entry),
+      cacheStatus: entry.cacheStatus,
+    }
   }
 
   app.get('/api/tiles/:z/:x/:y', async (c) => {
@@ -77,7 +87,7 @@ export function createApp(getApiKey: () => string | undefined, store = createTil
       x: Number(c.req.param('x')),
       y: Number(c.req.param('y')),
     }
-    const priority = c.req.query('priority') ?? 'visible'
+    const priority = c.req.header('X-Price-Priority') ?? c.req.query('priority') ?? 'visible'
     if (
       !validDataset(dataset) ||
       !validYear(dataset, year) ||
@@ -95,16 +105,17 @@ export function createApp(getApiKey: () => string | undefined, store = createTil
     const apiKey = getApiKey()
     if (!apiKey)
       return c.json({ error: 'サーバーの REINFOLIB_API_KEY が設定されていません。' }, 503)
-    return c.json(
-      await readTile(
-        dataset,
-        year,
-        tile,
-        apiKey,
-        c.req.raw.signal,
-        priority === 'background' ? 1 : 0,
-      ),
+    const { cacheControl, cacheStatus, ...data } = await readTile(
+      dataset,
+      year,
+      tile,
+      apiKey,
+      c.req.raw.signal,
+      priority === 'background' ? 1 : 0,
     )
+    c.header('Cache-Control', cacheControl)
+    if (cacheStatus) c.header('X-Price-Cache', cacheStatus)
+    return c.json(data)
   })
 
   app.get('/api/data', async (c) => {

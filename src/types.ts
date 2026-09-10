@@ -35,6 +35,7 @@ export interface DataResponse {
 export interface TileResponse {
   points: PricePoint[]
   fetchedAt: string
+  stale?: boolean
 }
 
 export const JAPAN_BOUNDS: Bounds = [122, 20, 154, 46]

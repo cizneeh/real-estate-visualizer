@@ -35,7 +35,7 @@ await page.route('**/api/tiles/**', async (route) => {
   const url = new URL(route.request().url())
   const key = url.pathname.slice('/api/tiles/'.length)
   const year = url.searchParams.get('year') ?? ''
-  const priority = url.searchParams.get('priority') ?? ''
+  const priority = route.request().headers()['x-price-priority'] ?? ''
   const dataset = url.searchParams.get('dataset') ?? ''
   requests.push({ key, year, priority, dataset })
   active++

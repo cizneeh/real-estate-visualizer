@@ -1,5 +1,6 @@
 import type { Feature, FeatureCollection } from 'geojson'
-import { CACHE_TTL, UpstreamError } from './tileStore'
+import { type CacheEntry, cachePolicy, cacheState } from './cachePolicy'
+import { UpstreamError } from './tileStore'
 
 function pause(milliseconds: number, signal: AbortSignal) {
   return new Promise<void>((resolve, reject) => {
@@ -77,6 +78,7 @@ export class EdgeRequestGate {
 }
 
 const gate = new EdgeRequestGate()
+const refreshLeases = new Map<string, number>()
 
 export function createEdgeTileStore({
   cache,
@@ -84,52 +86,83 @@ export function createEdgeTileStore({
   waitUntil,
   fetcher = fetch,
   requestGate = gate,
+  now = Date.now,
+  refreshes = refreshLeases,
 }: {
   cache: Pick<Cache, 'match' | 'put'>
   origin: string
   waitUntil: (promise: Promise<unknown>) => void
   fetcher?: typeof fetch
   requestGate?: EdgeRequestGate
+  now?: () => number
+  refreshes?: Map<string, number>
 }) {
   return {
     async get(url: string, apiKey: string, signal: AbortSignal, priority = 0) {
       signal.throwIfAborted()
       const upstream = new URL(url)
       const cacheKey = new Request(
-        `${origin}/__price-cache/v1${upstream.pathname}${upstream.search}`,
+        `${origin}/__price-cache/v2${upstream.pathname}${upstream.search}`,
       )
       const cached = await cache.match(cacheKey)
-      if (cached) return (await cached.json()) as { at: number; features: Feature[] }
-      return requestGate.run(
-        async () => {
-          const response = await fetcher(url, {
-            headers: { 'Ocp-Apim-Subscription-Key': apiKey },
-            signal: AbortSignal.any([signal, AbortSignal.timeout(15_000)]),
-          })
-          if (!response.ok) {
-            const retry = response.headers.get('Retry-After')
-            const seconds = retry ? Number(retry) || (Date.parse(retry) - Date.now()) / 1000 : 0
-            throw new UpstreamError(response.status, Number.isFinite(seconds) ? seconds : 0)
-          }
-          const data = (await response.json()) as FeatureCollection | Feature[]
-          const features = Array.isArray(data) ? data : data.features
-          if (!Array.isArray(features)) throw new UpstreamError(502)
-          const entry = { at: Date.now(), features }
-          waitUntil(
-            cache
+      const entry: CacheEntry | undefined = cached ? await cached.json() : undefined
+      const state = entry ? cacheState(url, entry, now()) : 'expired'
+      if (entry && state === 'fresh') return { ...entry, cacheStatus: 'HIT' as const }
+
+      const refresh = (refreshSignal: AbortSignal, refreshPriority: number) =>
+        requestGate.run(
+          async () => {
+            const shared = await cache.match(cacheKey)
+            if (shared) {
+              const latest: CacheEntry = await shared.json()
+              if (cacheState(url, latest, now()) === 'fresh')
+                return { ...latest, cacheStatus: 'HIT' as const }
+            }
+            const response = await fetcher(url, {
+              headers: { 'Ocp-Apim-Subscription-Key': apiKey },
+              signal: AbortSignal.any([refreshSignal, AbortSignal.timeout(15_000)]),
+            })
+            if (!response.ok) {
+              const retry = response.headers.get('Retry-After')
+              const seconds = retry ? Number(retry) || (Date.parse(retry) - Date.now()) / 1000 : 0
+              throw new UpstreamError(response.status, Number.isFinite(seconds) ? seconds : 0)
+            }
+            const data = (await response.json()) as FeatureCollection | Feature[]
+            const features = Array.isArray(data) ? data : data.features
+            if (!Array.isArray(features)) throw new UpstreamError(502)
+            const next = { at: now(), features }
+            const policy = cachePolicy(url, next)
+            await cache
               .put(
                 cacheKey,
-                Response.json(entry, {
-                  headers: { 'Cache-Control': `public, max-age=${CACHE_TTL / 1000}` },
+                Response.json(next, {
+                  headers: {
+                    'Cache-Control': `public, max-age=${(policy.fresh + policy.stale) / 1000}`,
+                  },
                 }),
               )
-              .catch(() => console.warn('Price tile edge cache write failed')),
+              .catch(() => console.warn('Price tile edge cache write failed'))
+            return { ...next, cacheStatus: 'MISS' as const }
+          },
+          refreshSignal,
+          refreshPriority,
+        )
+      if (entry && state === 'stale') {
+        if ((refreshes.get(cacheKey.url) ?? 0) <= now()) {
+          refreshes.set(cacheKey.url, now() + 30_000)
+          while (refreshes.size > 1000) {
+            const oldest = refreshes.keys().next().value
+            if (oldest) refreshes.delete(oldest)
+          }
+          waitUntil(
+            refresh(AbortSignal.timeout(25_000), 1).catch(() => {
+              console.warn('Price tile edge refresh failed; serving the previously fetched data.')
+            }),
           )
-          return entry
-        },
-        signal,
-        priority,
-      )
+        }
+        return { ...entry, cacheStatus: 'STALE' as const }
+      }
+      return refresh(signal, priority)
     },
   }
 }

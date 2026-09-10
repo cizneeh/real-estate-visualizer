@@ -1,7 +1,7 @@
 # 現行の地図をCloudflare Workersで公開する
 
 - 日付: 2026-09-06
-- 状態: 採用
+- 状態: 一部置換済み（キャッシュ更新・D1移行の検討方針は[ADR 0008](0008-shared-price-cache.md)で置換）
 - 関連: [ADR 0001](0001-tile-loading-and-cache.md)、[ADR 0002](0002-request-scheduling-and-prefetch.md)の公開環境での保存先・取得制御を一部置換
 
 ## 背景
