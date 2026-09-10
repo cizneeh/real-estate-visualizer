@@ -65,5 +65,13 @@ export function useCurrentLocation() {
     }
   }, [locate])
 
-  return { position, locating, error, locate }
+  const cancel = useCallback(() => {
+    requestId.current++
+    window.clearTimeout(errorTimer.current)
+    errorTimer.current = undefined
+    setLocating(false)
+    setError(undefined)
+  }, [])
+
+  return { position, locating, error, locate, cancel }
 }

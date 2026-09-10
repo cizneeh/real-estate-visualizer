@@ -25,6 +25,7 @@ import {
 } from 'lucide-react'
 import type { Map as LibreMap } from 'maplibre-gl'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { AddressSearch } from './AddressSearch'
 import { matchHistoryPoint, periodLabel } from './history'
 import { MapCanvas } from './MapCanvas'
 import {
@@ -44,6 +45,7 @@ import {
   type PricePoint,
   type ViewMode,
 } from './types'
+import { useAddressSearch } from './useAddressSearch'
 import { useCurrentLocation } from './useCurrentLocation'
 import { useMapTools } from './useMapTools'
 import { usePriceTiles } from './usePriceTiles'
@@ -78,7 +80,14 @@ export function App() {
   const years = useMemo(() => yearsForDataset(dataset), [dataset])
   const [legendOpen, setLegendOpen] = useState(false)
   const infoDialog = useRef<HTMLDialogElement>(null)
-  const { position, locating, error: locationError, locate } = useCurrentLocation()
+  const {
+    position,
+    locating,
+    error: locationError,
+    locate,
+    cancel: cancelLocation,
+  } = useCurrentLocation()
+  const addressSearch = useAddressSearch()
   const handleBounds = useCallback((next: Bounds) => setBounds(next), [])
   const handleSelect = useCallback(
     (point: PricePoint) => {
@@ -94,6 +103,12 @@ export function App() {
     if (!position) return
     setSelection(undefined)
   }, [position])
+
+  useEffect(() => {
+    if (!addressSearch.result) return
+    setSelection(undefined)
+    setPlaying(false)
+  }, [addressSearch.result])
 
   useEffect(() => {
     if (error) setPlaying(false)
@@ -164,6 +179,8 @@ export function App() {
   }
 
   function showJapan() {
+    cancelLocation()
+    addressSearch.clear()
     setSelection(undefined)
     setSidebarOpen(false)
     map?.fitBounds(JAPAN_BOUNDS, { padding: 40, pitch: 0, bearing: 0, duration: 1200 })
@@ -378,6 +395,7 @@ export function App() {
           metric={metric}
           mode={mode}
           position={position}
+          addressResult={addressSearch.result}
           selectedId={selected?.id}
           onBounds={handleBounds}
           onSelect={handleSelect}
@@ -393,6 +411,15 @@ export function App() {
         >
           <SlidersHorizontal size={18} />
         </button>
+
+        <AddressSearch
+          search={addressSearch}
+          ready={Boolean(map)}
+          onSearch={() => {
+            cancelLocation()
+            void addressSearch.search()
+          }}
+        />
 
         {(locating || locationError) && (
           <div className="location-notice" aria-live="polite">
@@ -561,7 +588,10 @@ export function App() {
               aria-label="現在地に戻る"
               title="現在地に戻る"
               disabled={locating}
-              onClick={locate}
+              onClick={() => {
+                addressSearch.clear()
+                locate()
+              }}
             >
               {locating ? <LoaderCircle size={17} className="spin" /> : <LocateFixed size={17} />}
             </button>
@@ -637,6 +667,24 @@ export function App() {
         <p>
           最初に東京駅周辺を表示し、位置情報を取得できた場合は現在地の周辺へ移動します。取得待ちや取得できない場合も東京周辺から探索できます。現在地ボタンで再取得でき、位置情報は保存しません。
         </p>
+        <h3>住所検索</h3>
+        <p>
+          日本国内の住所を入力すると、その位置へ移動します。番地の座標がない場合は町丁目の代表点、町丁目まで分からない場合は市区町村役場や都道府県庁の位置を表示します。検索結果に表示される位置の精度を確認してください。施設名・建物名による検索には対応していません。
+        </p>
+        <p>
+          住所の解析にはGeoloniaの住所正規化ライブラリを使い、必要な地域の住所データをブラウザから取得します。住所データはGeolonia作成のアドレス・ベース・レジストリ加工データ（CC
+          BY 4.0）です。入力した住所はアプリに保存しません。
+        </p>
+        <a
+          href="https://github.com/geolonia/japanese-addresses-v2/"
+          target="_blank"
+          rel="noreferrer"
+        >
+          住所データ：Geolonia <ExternalLink size={14} />
+        </a>
+        <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noreferrer">
+          住所データのライセンス：CC BY 4.0 <ExternalLink size={14} />
+        </a>
         <h3>価格の読み方</h3>
         <p>
           公示地価は1月1日、基準地価は7月1日時点の土地1㎡あたりの価格です。マンション取引は土地の価格とは異なるため、直接比較できません。公表前の年度や対象地点のない範囲は空になります。

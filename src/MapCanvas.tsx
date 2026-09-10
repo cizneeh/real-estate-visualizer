@@ -2,6 +2,7 @@ import type { GeoJSONSource, Map as LibreMap } from 'maplibre-gl'
 import * as maplibregl from 'maplibre-gl'
 import workerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url'
 import { useEffect, useRef, useState } from 'react'
+import type { AddressResult } from './geocoding'
 import { configureBasemap } from './mapStyle'
 import { PRICE_COLORS, pointCollection } from './metrics'
 import { PriceColumnLayer } from './PriceColumnLayer'
@@ -25,6 +26,7 @@ interface Props {
   metric: Metric
   mode: ViewMode
   position?: [number, number]
+  addressResult?: AddressResult
   selectedId?: string
   onBounds: (bounds: Bounds) => void
   onSelect: (point: PricePoint) => void
@@ -57,7 +59,11 @@ export function MapCanvas(props: Props) {
         maxZoom: 17,
         maxPitch: 65,
         renderWorldCopies: false,
-        attributionControl: { compact: true },
+        attributionControl: {
+          compact: true,
+          customAttribution:
+            '<a href="https://github.com/geolonia/japanese-addresses-v2/" target="_blank" rel="noreferrer">住所: Geolonia</a> (<a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noreferrer">CC BY 4.0</a>)',
+        },
         canvasContextAttributes: { preserveDrawingBuffer: true, antialias: true },
       })
     } catch {
@@ -232,6 +238,27 @@ export function MapCanvas(props: Props) {
       marker.remove()
     }
   }, [props.position, ready])
+
+  useEffect(() => {
+    const map = mapRef.current
+    const result = props.addressResult
+    if (!map || !ready || !result) return
+    map.flyTo({
+      center: result.coordinates,
+      zoom: result.zoom,
+      pitch: latest.current.mode === '3d' ? 48 : 0,
+      bearing: 0,
+      duration: 1200,
+    })
+    const element = document.createElement('div')
+    element.className = 'address-marker'
+    element.setAttribute('role', 'img')
+    element.setAttribute('aria-label', `検索地点：${result.label}（${result.precision}）`)
+    const marker = new maplibregl.Marker({ element }).setLngLat(result.coordinates).addTo(map)
+    return () => {
+      marker.remove()
+    }
+  }, [props.addressResult, ready])
 
   return (
     <>
