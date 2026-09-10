@@ -145,9 +145,6 @@ export function PointDetails({
                     entries={history.entries}
                     selectedYear={year}
                   />
-                  <p className="history-note">
-                    同じ地点と確認できた年を表示。欠測や地点変更の前後は線をつなぎません。
-                  </p>
                   {history.loading && (
                     <p className="history-progress">
                       <LoaderCircle size={13} className="spin" /> 各年の価格を取得中…
@@ -218,11 +215,11 @@ export function PointDetails({
               </dl>
             </details>
           )}
-          <p className="detail-note">
-            {dataset === 'transactions'
-              ? `${year}年の取引価格（㎡単価）の中央値。物件の所在地を示すものではありません。`
-              : '出典：国土交通省 不動産情報ライブラリ'}
-          </p>
+          {dataset === 'transactions' && (
+            <p className="detail-note">
+              {year}年の取引価格（㎡単価）の中央値。物件の所在地を示すものではありません。
+            </p>
+          )}
         </div>
       </section>
       {canScrollDown && (
