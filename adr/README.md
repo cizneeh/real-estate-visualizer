@@ -14,6 +14,7 @@
 | [公開APIを継続利用し、共有キャッシュから価格を返す](0008-shared-price-cache.md) | 採用 |
 | [データ種別と表示指標を分け、選択地点の価格推移を必要時に取得する](0009-point-price-history.md) | 採用 |
 | [対象年の操作をサイドバーの選択メニューにまとめる](0010-sidebar-year-selection.md) | 採用 |
+| [取引の駅座標を国交省の駅データと照合して駅名を表示する](0011-transaction-station-names.md) | 採用 |
 
 ## 記録する内容
 
