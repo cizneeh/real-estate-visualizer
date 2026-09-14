@@ -51,10 +51,10 @@ try {
   await expect(select.locator('option').first()).toHaveAttribute('value', '1995')
   await page.getByRole('button', { name: '前年比（%）' }).click()
   await ready(1995)
-  await page.getByRole('button', { name: /基準地価 7月1日時点/ }).click()
+  await select.selectOption('1997')
   await ready(1997)
-  await expect(select.locator('option').first()).toHaveAttribute('value', '1997')
-  await page.getByRole('button', { name: /マンション取引 中古マンション等/ }).click()
+  await expect(select.locator('option').first()).toHaveAttribute('value', '1995')
+  await page.getByRole('button', { name: /マンション取引価格 中古マンション等/ }).click()
   await ready(2005)
   await page.getByRole('button', { name: 'データ・表示について' }).click()
   await expect(page.getByRole('dialog')).toContainText('2005年の取引は7〜12月のみ')
@@ -72,9 +72,8 @@ try {
 
   const lastYear = new Date().getFullYear()
   for (const [name, firstYear] of [
-    [/マンション取引 中古マンション等/, 2005],
-    [/基準地価 7月1日時点/, 1997],
-    [/公示地価 1月1日時点/, 1995],
+    [/マンション取引価格 中古マンション等/, 2005],
+    [/土地価格 土地1㎡あたりの価格/, 1995],
   ] as const) {
     await page.getByRole('button', { name }).click()
     await select.selectOption(String(lastYear))

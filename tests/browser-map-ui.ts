@@ -95,6 +95,7 @@ async function labelHit(layerIds: string[], name?: string) {
               center,
               name: feature.properties['name:ja'] || feature.properties.name,
               layer: feature.layer.id,
+              feature: { source: hit.source, sourceLayer: hit.sourceLayer, id: hit.id },
             }
           }
         }
@@ -119,7 +120,7 @@ try {
   await expect
     .poll(() => page.locator('.map-canvas').evaluate((e) => e.clientWidth))
     .toBeGreaterThan(expandedWidth)
-  for (const name of [/基準地価/, /マンション取引/, /公示地価/]) {
+  for (const name of [/マンション取引/, /土地価格 土地1㎡/]) {
     const button = sidebar.getByRole('button', { name })
     await button.click()
     await expect(button).toHaveAttribute('aria-pressed', 'true')
@@ -141,8 +142,8 @@ try {
 
   await page.getByTitle('ポイント表示', { exact: true }).click()
   for (const scenario of [
-    { zoom: 10, layers: ['major-station-labels'], targetZoom: 15, name: 'major station' },
-    { zoom: 13, layers: ['station-labels'], targetZoom: 15, name: 'station' },
+    { zoom: 10, layers: ['major-station-labels'], targetZoom: 14.5, name: 'major station' },
+    { zoom: 15, layers: ['station-labels'], targetZoom: 14.5, name: 'station' },
     {
       zoom: 6,
       layers: ['place_state', 'place_city_large'],
@@ -166,8 +167,40 @@ try {
       })
       .toBe(true)
     assert.ok(hit)
+    await page.mouse.move(40, 40)
+    const clip = { x: Math.round(hit.x) - 55, y: Math.round(hit.y) - 14, width: 110, height: 28 }
+    const normalLabel = await page.screenshot({ clip })
     await page.mouse.move(hit.x, hit.y)
     await expect(page.locator('.maplibregl-canvas')).toHaveCSS('cursor', 'pointer')
+    await expect(page.getByRole('tooltip')).toHaveCount(0)
+    assert.ok(hit.feature.id !== undefined)
+    const hoveredFeature = hit.feature
+    await expect
+      .poll(() =>
+        page.evaluate(
+          (feature) => window.navigationTestMap.getFeatureState(feature).hover,
+          hoveredFeature,
+        ),
+      )
+      .toBe(true)
+    await settled()
+    assert.notDeepEqual(
+      await page.screenshot({ clip }),
+      normalLabel,
+      'hover should visibly highlight the label',
+    )
+    if (scenario.name === 'station') {
+      await page.screenshot({ path: `${destination}/ui-station-hover.png` })
+    }
+    await page.mouse.move(40, 40)
+    assert.equal(
+      await page.evaluate(
+        (feature) => window.navigationTestMap.getFeatureState(feature).hover,
+        hit.feature,
+      ),
+      false,
+    )
+    await page.mouse.move(hit.x, hit.y)
     await page.mouse.click(hit.x, hit.y)
     await settled()
     const actual = await page.evaluate(() => ({
@@ -177,7 +210,12 @@ try {
     assert.ok(Math.abs(actual.center[0] - hit.center[0]) < 0.001)
     assert.ok(Math.abs(actual.center[1] - hit.center[1]) < 0.001)
     assert.ok(Math.abs(actual.zoom - scenario.targetZoom) < 0.01)
-    console.log(`PASS: ${scenario.name} label ${hit.name} click flies to its coordinates and zoom`)
+    if (scenario.name === 'station') {
+      await page.screenshot({ path: `${destination}/ui-station-zoom.png` })
+    }
+    console.log(
+      `PASS: ${scenario.name} label ${hit.name} highlights on hover, clears on leave, and clicks to its coordinates and zoom`,
+    )
   }
 
   await toggle.click()
@@ -189,7 +227,13 @@ try {
       .click()
     await settled()
     await arrange(13, mode === '3d' ? 48 : 0)
-    const label = await labelHit(['station-labels'])
+    let label = await labelHit(['station-labels'])
+    await expect
+      .poll(async () => {
+        label = await labelHit(['station-labels'])
+        return !!label
+      })
+      .toBe(true)
     assert.ok(label)
     const coordinates = await page.evaluate(
       ({ localX, localY }) => window.navigationTestMap.unproject([localX, localY]).toArray(),
@@ -237,6 +281,29 @@ try {
       window.navigationTestMap.getCenter().toArray(),
       window.navigationTestMap.getZoom(),
     ])
+    await page.mouse.move(overlap.x, overlap.y)
+    await expect(page.getByRole('tooltip')).toHaveCount(0)
+    assert.equal(
+      await page.evaluate(
+        (id) => window.navigationTestMap.getFeatureState({ source: 'prices', id }).hover,
+        fixturePoints[0].id,
+      ),
+      true,
+    )
+    assert.equal(
+      await page.evaluate(({ x, y }) => {
+        const map = window.navigationTestMap
+        const rect = map.getCanvas().getBoundingClientRect()
+        return map
+          .queryRenderedFeatures([x - rect.x, y - rect.y], { layers: ['station-labels'] })
+          .some(
+            (f) =>
+              map.getFeatureState({ source: f.source, sourceLayer: f.sourceLayer, id: f.id }).hover,
+          )
+      }, overlap),
+      false,
+    )
+    await page.screenshot({ path: `${destination}/ui-${mode}-hover-priority.png` })
     await page.mouse.click(overlap.x, overlap.y)
     await expect(page.getByRole('complementary', { name: '地点の詳細' })).toBeVisible()
     await settled()
@@ -257,8 +324,8 @@ try {
   for (const width of [390, 320]) {
     await page.setViewportSize({ width, height: 844 })
     await expect(toggle).toHaveAttribute('aria-expanded', 'false')
-    await sidebar.getByRole('button', { name: /基準地価/ }).click()
-    await expect(sidebar.getByRole('button', { name: /基準地価/ })).toHaveAttribute(
+    await sidebar.getByRole('button', { name: /土地価格 土地1㎡/ }).click()
+    await expect(sidebar.getByRole('button', { name: /土地価格 土地1㎡/ })).toHaveAttribute(
       'aria-pressed',
       'true',
     )
@@ -278,7 +345,7 @@ try {
   assert.ok(hit)
   await page.mouse.click(hit.x, hit.y)
   assert.equal(await page.evaluate(() => window.navigationTestMap.isMoving()), false)
-  assert.equal(await page.evaluate(() => window.navigationTestMap.getZoom()), 15)
+  assert.equal(await page.evaluate(() => window.navigationTestMap.getZoom()), 14.5)
   assert.deepEqual(errors, [])
   console.log(
     'PASS: mobile 390/320px compact selection and panel controls, no overflow, reduced motion, no page errors',
