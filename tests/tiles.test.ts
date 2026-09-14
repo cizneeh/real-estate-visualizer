@@ -222,8 +222,13 @@ test('tile API returns the whole tile with stable IDs, rejects invalid tiles, an
     properties: { u_transaction_price_total_ja: '4,000万円', u_area_ja: '80㎡' },
   }))
   let calls = 0
+  let stationCalls = 0
   const app = createApp(() => 'secret', {
-    get: async () => {
+    get: async (url) => {
+      if (new URL(url).pathname.endsWith('/XKT015')) {
+        stationCalls++
+        return { at: 1000, features: [] }
+      }
       calls++
       return { at: 1000, features }
     },
@@ -245,6 +250,7 @@ test('tile API returns the whole tile with stable IDs, rejects invalid tiles, an
     assert.equal((await app.request(invalid)).status, 400)
   }
   assert.equal(calls, 2)
+  assert.equal(stationCalls, 2)
 })
 
 test('neighbor tiles form a bounded outer ring and overview requests have no tile work', () => {

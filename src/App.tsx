@@ -33,6 +33,7 @@ import {
   median,
   PRICE_COLORS,
   priceLabel,
+  stationAreaLabel,
 } from './metrics'
 import { PointDetails, type PointSelection } from './PointDetails'
 import {
@@ -329,7 +330,13 @@ export function App() {
                   <span className="rank-number">0{i + 1}</span>
                   <span className="rank-label">
                     <strong>{point.address || point.municipality}</strong>
-                    <small>{point.station ? `${point.station}駅周辺` : point.category}</small>
+                    <small>
+                      {point.count !== undefined
+                        ? `${point.count}件の取引`
+                        : point.station
+                          ? stationAreaLabel(point.station)
+                          : point.category}
+                    </small>
                   </span>
                   <span className="rank-value">
                     {formatMetric(point)}
