@@ -548,6 +548,7 @@ p {
   pointer-events: auto;
 }
 .map-bottom .map-context {
+  position: relative;
   min-width: 0;
   pointer-events: none;
 }

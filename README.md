@@ -137,6 +137,16 @@ npm run test:e2e
 npm run build
 ```
 
+PRのCIではlint・型検査・全単体テスト・本番ビルド・Workerのバンドル確認に加え、固定データを使ったデスクトップ/モバイルのE2Eを実行します。ローカルでも同じE2Eを実行できます。
+
+```bash
+npx playwright install chromium
+npm run build
+npm run test:e2e:ci
+```
+
+E2Eは専用サーバーを起動・終了します。ポートが使用中なら`E2E_PORT=5191 npm run test:e2e:ci`のように変更できます。実際のHono・React・MapLibreを使い、国交省の取得結果、背景地図、Webフォントは固定応答に置き換えるためAPIキーは不要です。成功時のスクリーンショットは`tmp/screenshots`、失敗時のスクリーンショットとtraceは`tmp/playwright`に保存します。実APIや地図ラベルの配信状態を確認する既存の`test:e2e`系コマンドも引き続き使用できます。
+
 E2Eテストは開発サーバー起動中に実行します。`test:e2e:cache`は価格APIを模擬し、段階表示・ズーム／移動時のキャッシュ再利用・先読み・年度切り替え・キャンセル・部分失敗の再試行を検証します。`test:e2e`は実APIで画面全体を確認します。どちらもインストール済みのGoogle Chromeを使い、スクリーンショットをプロジェクト内の`tmp/screenshots/`に保存します。
 
 `test:e2e:history`は価格APIを模擬し、過去の年の選択・種別ごとの開始年・自動再生の折り返し・デスクトップとスマートフォン幅での年表操作を検証します。
@@ -146,6 +156,12 @@ E2Eテストは開発サーバー起動中に実行します。`test:e2e:cache`�
 ビルドした画面をHonoから配信する場合は開発サーバーを停止後、`npm start`を実行し、http://127.0.0.1:8787 を開きます。
 
 `.env`、APIキャッシュ、スクリーンショット、依存パッケージはGit管理対象外です。`.env.example`にキーの雛形だけを含めています。
+
+## 依存更新
+
+[Dependabot](.github/dependabot.yml)がnpmとGitHub Actionsの更新PRを作成します。majorも含め、[CI](.github/workflows/ci.yml)の必要なジョブ・ステップがすべて成功したDependabotのPRを[自動マージ処理](.github/workflows/dependabot-automerge.yml)がsquash mergeします。設定がmainに入るまで自動マージは動きません。導入PRのマージやデプロイは自動化していません。
+
+自動マージは同一リポジトリのmain向けPRに限定し、npmのバージョン/lockfile更新、既存Actionの固定SHA更新だけを許可します。実装・テスト・npm scripts・Workflowの処理変更が含まれる場合や、チェックが失敗/未完了/スキップ、変更要求レビュー、`do-not-merge`ラベルがある場合は保留します。mainが先に進んだ場合は、Dependabotがrebaseした後の新しいCIを待ちます。対応する設計判断とプラン上の制約は[ADR 0015](adr/0015-tested-dependency-updates.md)に記録しています。
 
 ## 出典
 
