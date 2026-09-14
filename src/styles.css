@@ -218,6 +218,59 @@ p {
 .dataset-button:where(.active) small {
   color: #718c81;
 }
+.transaction-types {
+  display: grid;
+  gap: 4px;
+  min-inline-size: 0;
+  margin: 10px 0 0 21px;
+  padding: 0 0 0 12px;
+  border: 0;
+  border-left: 1px solid #d3e2dc;
+}
+.transaction-types legend {
+  margin-bottom: 6px;
+  padding: 0;
+  color: #71817d;
+  font-size: 11px;
+}
+.transaction-types button {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  text-align: left;
+  color: #51606c;
+  background: transparent;
+}
+.transaction-types button:hover {
+  background: #f0f4f3;
+}
+.transaction-types button.active {
+  background: #eaf2ef;
+  border-color: #d3e2dc;
+  color: #225a50;
+}
+.transaction-types strong {
+  display: block;
+  font-size: 12px;
+  font-weight: 550;
+}
+.transaction-types small {
+  display: block;
+  margin-top: 4px;
+  font-size: 10px;
+  line-height: 1.6;
+  color: #71817d;
+}
+.transaction-types svg {
+  flex-shrink: 0;
+}
+.transaction-price-note {
+  color: #516f68;
+}
 .selected-check {
   width: 17px;
   height: 17px;
@@ -1373,6 +1426,103 @@ p {
   border: 0;
   margin-top: 10px;
   padding-top: 0;
+}
+.transaction-details {
+  margin-top: 18px;
+  font-size: 12px;
+}
+.transaction-details h4 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 500;
+}
+.transaction-count,
+.transaction-comparison h4 {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 10px;
+}
+.transaction-count > strong {
+  font-size: 18px;
+}
+.transaction-comparison {
+  border-block: 1px solid #374957;
+  padding-block: 16px;
+  margin-block: 16px;
+}
+.transaction-comparison h4 strong {
+  font-size: 21px;
+  font-weight: 500;
+}
+.comparison-period,
+.comparison-status,
+.comparison-note {
+  color: #aec3cd;
+  line-height: 1.8;
+  margin: 10px 0 0;
+}
+.comparison-status {
+  color: #d6dfe3;
+}
+.transaction-comparison table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 10px;
+  font-variant-numeric: tabular-nums;
+}
+.transaction-comparison th,
+.transaction-comparison td {
+  font-weight: 400;
+  padding: 7px 0;
+  text-align: right;
+  border-bottom: 1px solid #374957;
+}
+.transaction-comparison th:first-child {
+  text-align: left;
+}
+.transaction-comparison thead {
+  color: #aec3cd;
+  font-size: 11px;
+}
+.transaction-record,
+.previous-transactions {
+  border-bottom: 1px solid #374957;
+  padding: 10px 0;
+}
+.transaction-record summary,
+.previous-transactions > summary {
+  cursor: pointer;
+  color: #d3e0e6;
+  line-height: 1.8;
+}
+.transaction-record summary strong {
+  display: block;
+  margin-left: 15px;
+  font-weight: 500;
+}
+.transaction-record dl {
+  margin-block: 10px 2px;
+  padding-top: 0;
+  border: 0;
+  gap: 8px 12px;
+}
+.transaction-record dd {
+  overflow-wrap: anywhere;
+}
+.previous-transactions {
+  margin-top: 16px;
+}
+.missing-change-legend {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.missing-change-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #919ba5;
 }
 .detail-note {
   color: #a5bdc9;

@@ -1,7 +1,8 @@
 import { queryOptions } from '@tanstack/react-query'
 import { RequestQueue } from './requestQueue'
 import { type Tile, tileKey } from './tiles'
-import type { LegacyDataset, TileResponse } from './types'
+import { DEFAULT_TRANSACTION_TYPE } from './transactions'
+import type { LegacyDataset, TileResponse, TransactionType } from './types'
 
 export class TileError extends Error {
   constructor(
@@ -17,8 +18,19 @@ export function sourceDataset(dataset: LegacyDataset): LegacyDataset {
   return dataset === 'change' ? 'land' : dataset
 }
 
-export const priceTileKey = (dataset: LegacyDataset, year: number, tile: Tile) =>
-  ['price-tile', sourceDataset(dataset), year, tileKey(tile)] as const
+export const priceTileKey = (
+  dataset: LegacyDataset,
+  year: number,
+  tile: Tile,
+  transactionType: TransactionType = DEFAULT_TRANSACTION_TYPE,
+) =>
+  [
+    'price-tile',
+    sourceDataset(dataset),
+    year,
+    tileKey(tile),
+    ...(dataset === 'transactions' ? [transactionType] : []),
+  ] as const
 
 export function createTileQueries(fetcher = fetch) {
   const queue = new RequestQueue(6, 0, 2)
@@ -29,8 +41,13 @@ export function createTileQueries(fetcher = fetch) {
       visible = new Set(keys)
       queue.pump()
     },
-    options(dataset: LegacyDataset, year: number, tile: Tile) {
-      const queryKey = priceTileKey(dataset, year, tile)
+    options(
+      dataset: LegacyDataset,
+      year: number,
+      tile: Tile,
+      transactionType: TransactionType = DEFAULT_TRANSACTION_TYPE,
+    ) {
+      const queryKey = priceTileKey(dataset, year, tile, transactionType)
       const priority = () => (visible.has(JSON.stringify(queryKey)) ? 0 : 1)
       return queryOptions<TileResponse, TileError>({
         queryKey,
@@ -46,6 +63,9 @@ export function createTileQueries(fetcher = fetch) {
                 dataset: sourceDataset(dataset),
                 year: String(year),
               })
+              if (dataset === 'transactions' && transactionType !== DEFAULT_TRANSACTION_TYPE) {
+                params.set('transactionType', transactionType)
+              }
               const response = await fetcher(`/api/tiles/${tileKey(tile)}?${params}`, {
                 signal,
                 headers: { 'X-Price-Priority': priority() === 0 ? 'visible' : 'background' },
@@ -65,6 +85,7 @@ export function createTileQueries(fetcher = fetch) {
                 points: tileResult.points.map((point) => ({
                   ...point,
                   source: source === 'land' || source === 'survey' ? source : undefined,
+                  transactionType: source === 'transactions' ? transactionType : undefined,
                 })),
               }
             },

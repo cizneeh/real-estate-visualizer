@@ -26,21 +26,22 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { displayPeriodLabel, matchLandHistoryPoint } from './history'
 import { LandPriceHelp } from './LandPriceHelp'
 import { MapCanvas } from './MapCanvas'
-import {
-  CHANGE_COLORS,
-  changeLabel,
-  groupTransactions,
-  median,
-  PRICE_COLORS,
-  priceLabel,
-} from './metrics'
+import { CHANGE_COLORS, changeLabel, median, PRICE_COLORS, priceLabel } from './metrics'
 import { PointDetails, type PointSelection } from './PointDetails'
+import {
+  MIN_COMPARISON_COUNT,
+  summarizeTransactions,
+  TRANSACTION_COMPARISON_NOTE,
+  transactionComparisonLabel,
+} from './transactionComparison'
+import { DEFAULT_TRANSACTION_TYPE, TRANSACTION_TYPES, transactionTypes } from './transactions'
 import {
   type Bounds,
   type DisplayDataset,
   JAPAN_BOUNDS,
   type Metric,
   type PricePoint,
+  type TransactionType,
   type ViewMode,
 } from './types'
 import { useCurrentLocation } from './useCurrentLocation'
@@ -52,8 +53,8 @@ const DATASETS: { id: DisplayDataset; name: string; description: string; icon: t
   { id: 'land', name: '土地価格', description: '土地1㎡あたりの価格', icon: Layers3 },
   {
     id: 'transactions',
-    name: 'マンション取引価格',
-    description: '中古マンション等の実取引',
+    name: '取引価格',
+    description: '種別ごとの実際の取引',
     icon: Building2,
   },
 ]
@@ -61,15 +62,23 @@ const EMPTY_POINTS: PricePoint[] = []
 
 export function App() {
   const [dataset, setDataset] = useState<DisplayDataset>('land')
+  const [transactionType, setTransactionType] = useState<TransactionType>(DEFAULT_TRANSACTION_TYPE)
   const [metric, setMetric] = useState<Metric>('price')
   const [year, setYear] = useState(2026)
   const [mode, setMode] = useState<ViewMode>('3d')
   const [category, setCategory] = useState('すべて')
   const [bounds, setBounds] = useState<Bounds>()
-  const { data, loading, error, completed, retry, requests } = usePriceTiles(bounds, dataset, year)
+  const [selection, setSelection] = useState<PointSelection>()
+  const { data, loading, error, completed, retry, requests, previousPoints, comparisonStatus } =
+    usePriceTiles(
+      bounds,
+      dataset,
+      year,
+      transactionType,
+      dataset === 'transactions' && (metric === 'change' || !!selection),
+    )
   const [map, setMap] = useState<LibreMap>()
   const [mapRendered, setMapRendered] = useState(false)
-  const [selection, setSelection] = useState<PointSelection>()
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const years = useMemo(() => yearsForDataset(dataset), [dataset])
   const [legendOpen, setLegendOpen] = useState(false)
@@ -90,17 +99,32 @@ export function App() {
     setSelection(undefined)
   }, [position])
 
-  const currentData = data?.dataset === dataset && data.year === year ? data : undefined
+  const currentData =
+    data?.dataset === dataset &&
+    data.year === year &&
+    (dataset !== 'transactions' || data.transactionType === transactionType)
+      ? data
+      : undefined
   const showZoomHint = currentData?.zoomRequired && !loading && mapRendered && !error
   const rawPoints = currentData?.points ?? EMPTY_POINTS
+  const transactions = useMemo(
+    () =>
+      summarizeTransactions(
+        dataset === 'transactions' ? rawPoints : EMPTY_POINTS,
+        previousPoints,
+        year,
+        comparisonStatus,
+      ),
+    [rawPoints, previousPoints, year, comparisonStatus, dataset],
+  )
   const points = useMemo(() => {
-    if (dataset === 'transactions') return groupTransactions(rawPoints)
+    if (dataset === 'transactions') return transactions.points
     return rawPoints.filter(
       (point) =>
         (category === 'すべて' || point.category === category) &&
         (metric !== 'change' || point.change !== undefined),
     )
-  }, [rawPoints, dataset, metric, category])
+  }, [rawPoints, dataset, metric, category, transactions.points])
   const selected =
     selection &&
     (dataset === 'transactions'
@@ -109,14 +133,25 @@ export function App() {
         (year === selection.year
           ? points.find((point) => point.id === selection.point.id)
           : undefined)))
-  useMapTools({ dataset, metric, year, bounds, loading, error, points })
+  useMapTools({
+    dataset,
+    transactionType: dataset === 'transactions' ? transactionType : undefined,
+    metric,
+    year,
+    bounds,
+    loading,
+    error,
+    points,
+    comparisonPeriod: dataset === 'transactions' ? transactions.period : undefined,
+  })
   const midpoint = median(points.map((point) => point.price))
   const medianChange = median(
     points.flatMap((point) => (point.change === undefined ? [] : [point.change])),
   )
   const ranking = useMemo(
     () =>
-      [...points]
+      points
+        .filter((point) => metric !== 'change' || point.change !== undefined)
         .sort((a, b) =>
           metric === 'change' ? (b.change ?? 0) - (a.change ?? 0) : b.price - a.price,
         )
@@ -191,6 +226,29 @@ export function App() {
                     )}
                   </button>
                   {id === 'land' && <LandPriceHelp />}
+                  {id === 'transactions' && dataset === id && (
+                    <fieldset className="transaction-types">
+                      <legend>取引の種別</legend>
+                      {transactionTypes.map((type) => (
+                        <button
+                          key={type}
+                          type="button"
+                          className={transactionType === type ? 'active' : ''}
+                          aria-pressed={transactionType === type}
+                          onClick={() => {
+                            setTransactionType(type)
+                            setSelection(undefined)
+                          }}
+                        >
+                          <span>
+                            <strong>{TRANSACTION_TYPES[type].label}</strong>
+                            <small>{TRANSACTION_TYPES[type].description}</small>
+                          </span>
+                          {transactionType === type && <Check size={14} aria-hidden="true" />}
+                        </button>
+                      ))}
+                    </fieldset>
+                  )}
                 </div>
               ))}
             </div>
@@ -213,7 +271,6 @@ export function App() {
                   type="button"
                   aria-pressed={metric === id}
                   className={metric === id ? 'active' : ''}
-                  disabled={id === 'change' && dataset === 'transactions'}
                   onClick={() => {
                     setMetric(id)
                     if (id === 'change' && mode === 'heatmap') setMode('points')
@@ -225,11 +282,24 @@ export function App() {
             </div>
             <p className="metric-description">
               {dataset === 'transactions'
-                ? '駅周辺の取引単価の中央値。前年比は未対応です。'
+                ? metric === 'change'
+                  ? '同じ駅・同じ種別の㎡単価の中央値を前年と比較します。'
+                  : '駅周辺の取引単価の中央値'
                 : metric === 'change'
                   ? `${year - 1}年から${year}年への価格の変化率`
                   : '選択した年の土地1㎡あたりの価格'}
             </p>
+            {dataset === 'transactions' && (
+              <>
+                <p className="metric-description transaction-price-note">
+                  実際の取引における㎡単価を、最寄り駅の位置ごとに集計した中央値です。
+                </p>
+                <p className="metric-description">
+                  各取引データは{transactionType === 'land' ? '面積' : '築年数'}
+                  や駅徒歩などの条件が異なり、地域や年によっては件数も限られます。そのため、中央値が必ずしも地域全体の相場を反映するとは限りません。立地ごとの土地の価格水準を見るには、「土地価格」を参考にしてください。
+                </p>
+              </>
+            )}
           </section>
 
           {dataset !== 'transactions' && (
@@ -271,7 +341,15 @@ export function App() {
               ))}
             </select>
             <p className="year-period" aria-live="polite">
-              {displayPeriodLabel(dataset, metric, year)}
+              {dataset === 'transactions' && metric === 'change'
+                ? loading
+                  ? '比較期間を確認中…'
+                  : year === 2005
+                    ? '前年はデータ提供開始前'
+                    : comparisonStatus === 'error'
+                      ? '比較データを取得できませんでした'
+                      : transactionComparisonLabel(transactions.period)
+                : displayPeriodLabel(dataset, metric, year)}
             </p>
           </div>
 
@@ -281,12 +359,18 @@ export function App() {
           >
             <div className="section-heading">
               <h3 id="summary-title">
-                {dataset === 'transactions' ? '駅別中央値の中央値' : '表示範囲の中央値'}
+                {dataset === 'transactions'
+                  ? metric === 'change'
+                    ? '駅別前年比の中央値'
+                    : '駅別中央値の中央値'
+                  : '表示範囲の中央値'}
               </h3>
               <span>
                 {loading
                   ? `${points.length.toLocaleString()}地点・取得途中`
-                  : `${points.length.toLocaleString()}地点`}
+                  : dataset === 'transactions' && metric === 'change'
+                    ? `${points.filter((point) => point.change !== undefined).length.toLocaleString()} / ${points.length.toLocaleString()}地点で比較`
+                    : `${points.length.toLocaleString()}地点`}
               </span>
             </div>
             <div className="big-metric">
@@ -343,7 +427,9 @@ export function App() {
                   ? '地図の範囲からデータを取得しています'
                   : currentData?.zoomRequired
                     ? '見たい地域を拡大してください'
-                    : 'この範囲には対象地点がありません'}
+                    : dataset === 'transactions' && metric === 'change' && points.length
+                      ? 'この範囲には前年比を比較できる地点がありません'
+                      : 'この範囲には対象地点がありません'}
               </p>
             )}
           </section>
@@ -428,6 +514,7 @@ export function App() {
             requests={requests}
             dataset={dataset}
             year={year}
+            transactionSummary={transactions.summaries.get(selection.point.id)}
             onClose={() => setSelection(undefined)}
           />
         )}
@@ -480,6 +567,12 @@ export function App() {
                     {metric === 'change'
                       ? '高さは変動率の絶対値、色は増減を表します'
                       : '高さは価格の平方根に比例（上限6,500m）'}
+                  </p>
+                )}
+                {dataset === 'transactions' && metric === 'change' && (
+                  <p className="missing-change-legend">
+                    <span className="missing-change-dot" />
+                    灰色：比較データ不足・未取得
                   </p>
                 )}
               </div>
@@ -578,20 +671,30 @@ export function App() {
         </p>
         <h3>価格の読み方</h3>
         <p>
-          土地価格は、公示地価（1月1日）と基準地価（7月1日）をまとめた土地1㎡あたりの価格です。選択した年に両方ある同一地点は最新値を採用し、別の地点はそれぞれ表示します。マンション取引は土地の価格とは異なるため、直接比較できません。公表前の年度や対象地点のない範囲は空になります。
+          土地価格は、公示地価（1月1日）と基準地価（7月1日）をまとめた土地1㎡あたりの評価価格です。選択した年に両方ある同一地点は最新値を採用し、別の地点はそれぞれ表示します。取引価格は実際の取引に基づく値です。公表前の年度や対象地点のない範囲は空になります。
         </p>
         <p>
           土地価格は{FIRST_YEAR.land}年から選べ、{FIRST_YEAR.survey}
-          年以降は基準地価も含みます。マンション取引価格は
+          年以降は基準地価も含みます。取引価格は
           {FIRST_YEAR.transactions}
-          年から選べます。2005年の取引は7〜12月のみです。前年比は採用した調査の前年値との比較で、変動率が提供されている地点だけを表示します。
+          年から選べます。2005年の取引は7〜12月のみです。土地価格の前年比は採用した調査の前年値との比較で、変動率が提供されている地点だけを表示します。
         </p>
         <p>
-          マンション取引は中古マンション等の取引価格情報を使用します。各取引の総額を面積で割り、同じ最寄り駅の座標ごとに中央値を算出しています。面積が「以上」等で表された取引は計算から除きます。地点の高さや地図上の位置は、建物の高さや物件所在地を表しません。
+          取引価格は「中古マンション等」「宅地（土地）」「宅地（土地と建物）」を種別ごとに表示します。公表された㎡単価を優先し、ない場合は取引総額を面積で割り、同じ最寄り駅の座標ごとに中央値を算出します。面積が「以上」等で表された取引は総額からの単価計算に使いません。地点の高さや地図上の位置は、建物の高さや物件所在地を表しません。
+        </p>
+        <p>
+          中古マンション等は専有面積、宅地は土地面積あたりの価格です。「宅地（土地と建物）」は建物込みの総額を土地面積で割るため、土地だけの価格ではありません。種別によって単価の意味が異なり、そのまま比較できません。農地・林地と成約価格情報は対象外です。
         </p>
         <h3>地点の価格推移</h3>
         <p>
-          土地価格の地点を選ぶと、各年の最新の公開価格で対象年までの価格推移を表示します。初期表示は5年前からで、10年前から・全期間に切り替えられます。識別番号・所在地・位置から同じ地点と確認できた年のみ表示し、欠測や地点変更の前後は線をつなぎません。推移は選んだ地点周辺のデータから取得します。マンション取引の推移は未対応です。
+          取引価格の前年比は、同じ駅座標・種別の㎡単価の中央値を比較します。表示範囲で取得できた対象年の最新四半期まで前年も同じ月にそろえ、両年とも
+          {MIN_COMPARISON_COUNT}
+          件以上ある場合に表示します。2006年は前年の提供期間に合わせ7月以降を比較します。
+          {TRANSACTION_COMPARISON_NOTE}{' '}
+          件数が少ないほど変動しやすくなります。地点の詳細では両年の件数・中央値と各取引を確認できます。
+        </p>
+        <p>
+          土地価格の地点を選ぶと、各年の最新の公開価格で対象年までの価格推移を表示します。初期表示は5年前からで、10年前から・全期間に切り替えられます。識別番号・所在地・位置から同じ地点と確認できた年のみ表示し、欠測や地点変更の前後は線をつなぎません。推移は選んだ地点周辺のデータから取得します。取引価格の推移は未対応です。
         </p>
         <h3>集計と可視化</h3>
         <p>

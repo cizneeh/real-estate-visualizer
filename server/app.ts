@@ -9,7 +9,19 @@ import {
   tileKey,
   tilesForBounds,
 } from '../src/tiles'
-import type { Bounds, DataResponse, LegacyDataset, PricePoint, TileResponse } from '../src/types'
+import {
+  DEFAULT_TRANSACTION_TYPE,
+  TRANSACTION_TYPES,
+  validTransactionType,
+} from '../src/transactions'
+import type {
+  Bounds,
+  DataResponse,
+  LegacyDataset,
+  PricePoint,
+  TileResponse,
+  TransactionType,
+} from '../src/types'
 import { FIRST_YEAR, validYear } from '../src/years'
 import { browserCacheControl, type CacheStatus, type TileStore } from './cachePolicy'
 import { normalizePoint } from './data'
@@ -46,6 +58,7 @@ export function createApp(
     apiKey: string,
     signal: AbortSignal,
     priority = 0,
+    transactionType: TransactionType = DEFAULT_TRANSACTION_TYPE,
   ): Promise<TileResponse & { cacheControl: string; cacheStatus?: CacheStatus }> {
     const params = new URLSearchParams({
       response_format: 'geojson',
@@ -57,7 +70,7 @@ export function createApp(
       params.set('from', `${year}${year === FIRST_YEAR.transactions ? 3 : 1}`)
       params.set('to', `${year}4`)
       params.set('priceClassification', '01')
-      params.set('landTypeCode', '07')
+      params.set('landTypeCode', TRANSACTION_TYPES[transactionType].code)
     } else {
       params.set('year', String(year))
       params.set('priceClassification', dataset === 'survey' ? '1' : '0')
@@ -66,7 +79,7 @@ export function createApp(
     const entry = await store.get(url, apiKey, signal, priority)
     const points = new Map<string, PricePoint>()
     entry.features.forEach((feature, index) => {
-      const point = normalizePoint(feature, dataset, `${tileKey(tile)}/${index}`)
+      const point = normalizePoint(feature, dataset, `${tileKey(tile)}/${index}`, transactionType)
       if (point && tileKey(tileAt(point.coordinates, tile.z)) === tileKey(tile))
         points.set(point.id, point)
     })
@@ -81,6 +94,7 @@ export function createApp(
 
   app.get('/api/tiles/:z/:x/:y', async (c) => {
     const dataset = c.req.query('dataset') ?? 'land'
+    const transactionType = c.req.query('transactionType') ?? DEFAULT_TRANSACTION_TYPE
     const year = Number(c.req.query('year') ?? 2025)
     const tile = {
       z: Number(c.req.param('z')),
@@ -90,6 +104,7 @@ export function createApp(
     const priority = c.req.header('X-Price-Priority') ?? c.req.query('priority') ?? 'visible'
     if (
       !validDataset(dataset) ||
+      !validTransactionType(transactionType) ||
       !validYear(dataset, year) ||
       tile.z !== DATA_ZOOM ||
       ![tile.x, tile.y].every(
@@ -112,6 +127,7 @@ export function createApp(
       apiKey,
       c.req.raw.signal,
       priority === 'background' ? 1 : 0,
+      transactionType,
     )
     c.header('Cache-Control', cacheControl)
     if (cacheStatus) c.header('X-Price-Cache', cacheStatus)
@@ -120,10 +136,12 @@ export function createApp(
 
   app.get('/api/data', async (c) => {
     const dataset = c.req.query('dataset') ?? 'land'
+    const transactionType = c.req.query('transactionType') ?? DEFAULT_TRANSACTION_TYPE
     const year = Number(c.req.query('year') ?? 2025)
     const bounds = (c.req.query('bounds') ?? '').split(',').map(Number)
     if (
       !validDataset(dataset) ||
+      !validTransactionType(transactionType) ||
       !validYear(dataset, year) ||
       bounds.length !== 4 ||
       !bounds.every(Number.isFinite) ||
@@ -141,6 +159,7 @@ export function createApp(
       points: [],
       year,
       dataset: dataset as LegacyDataset,
+      transactionType: dataset === 'transactions' ? transactionType : undefined,
       fetchedAt: new Date().toISOString(),
       tiles: 0,
       failedTiles: 0,
@@ -158,7 +177,9 @@ export function createApp(
       return c.json({ error: 'サーバーの REINFOLIB_API_KEY が設定されていません。' }, 503)
     response.tiles = tiles.length
     const results = await Promise.allSettled(
-      tiles.map((tile) => readTile(dataset, year, tile, apiKey, c.req.raw.signal)),
+      tiles.map((tile) =>
+        readTile(dataset, year, tile, apiKey, c.req.raw.signal, 0, transactionType),
+      ),
     )
     let upstreamStatus: number | undefined
     const unique = new Map<string, ReturnType<typeof normalizePoint>>()

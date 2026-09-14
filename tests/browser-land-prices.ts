@@ -94,7 +94,7 @@ try {
     'aria-pressed',
     'true',
   )
-  await expect(page.getByRole('button', { name: /マンション取引価格 中古/ })).toBeVisible()
+  await expect(page.getByRole('button', { name: /取引価格 種別ごとの実際の取引/ })).toBeVisible()
   await select.selectOption('2025')
   await ready()
   await expect(page.locator('.area-summary .section-heading')).toContainText('3地点')
@@ -165,10 +165,10 @@ try {
   await select.selectOption('1995')
   await ready()
   assert.ok(!requests.some((url) => url.includes('dataset=survey') && /year=199[56]/.test(url)))
-  await page.getByRole('button', { name: /マンション取引価格 中古/ }).click()
+  await page.getByRole('button', { name: /取引価格 種別ごとの実際の取引/ }).click()
   await ready()
   await expect(select).toHaveValue('2005')
-  await expect(page.getByRole('button', { name: '前年比（%）' })).toBeDisabled()
+  await expect(page.getByRole('button', { name: '前年比（%）' })).toBeEnabled()
   await page.getByRole('button', { name: /土地価格 土地1㎡/ }).click()
   await select.selectOption('2025')
   await ready()
