@@ -2,6 +2,8 @@ import type { GeoJSONSource, Map as LibreMap } from 'maplibre-gl'
 import * as maplibregl from 'maplibre-gl'
 import workerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url'
 import { useEffect, useRef, useState } from 'react'
+import { createMapHover } from './mapHover'
+import { hitNavigationTarget, navigateToLabel, navigationLayers } from './mapNavigation'
 import { configureBasemap } from './mapStyle'
 import { PRICE_COLORS, pointCollection } from './metrics'
 import { PriceColumnLayer } from './PriceColumnLayer'
@@ -36,6 +38,7 @@ export function MapCanvas(props: Props) {
   const container = useRef<HTMLElement>(null)
   const mapRef = useRef<LibreMap | undefined>(undefined)
   const columnsRef = useRef<PriceColumnLayer | undefined>(undefined)
+  const clearHoverRef = useRef<(() => void) | undefined>(undefined)
   const latest = useRef(props)
   latest.current = props
   const [ready, setReady] = useState(false)
@@ -81,7 +84,11 @@ export function MapCanvas(props: Props) {
       ])
     }
     map.on('load', () => {
-      map.addSource('prices', { type: 'geojson', data: pointCollection([], 'price') })
+      map.addSource('prices', {
+        type: 'geojson',
+        data: pointCollection([], 'price'),
+        promoteId: 'id',
+      })
       map.addLayer({
         id: 'price-heat',
         type: 'heatmap',
@@ -156,16 +163,32 @@ export function MapCanvas(props: Props) {
         const id = features[0]?.properties?.id
         return latest.current.points.find((point) => point.id === id)
       }
+      const labelLayers = navigationLayers(map)
+      const hover = createMapHover(map, labelLayers)
+      const clearHover = () => {
+        hover.clear()
+        columns.setHovered(undefined)
+      }
+      clearHoverRef.current = clearHover
+      map.on('movestart', clearHover)
+      map.getCanvas().addEventListener('mouseleave', clearHover)
       map.on('click', (event) => {
         const point = hitPoint(event.point)
-        if (point) latest.current.onSelect(point)
+        clearHover()
+        if (point) {
+          latest.current.onSelect(point)
+          return
+        }
+        const target = hitNavigationTarget(map, event.point, labelLayers)
+        if (target) navigateToLabel(map, target)
       })
       map.on('mousemove', (event) => {
+        if (map.isMoving()) return
         const point = hitPoint(event.point)
         columns.setHovered(point?.id)
-        map.getCanvas().style.cursor = point ? 'pointer' : ''
+        const target = point ? undefined : hitNavigationTarget(map, event.point, labelLayers)
+        hover.show(point, target)
       })
-      map.getCanvas().addEventListener('mouseleave', () => columns.setHovered(undefined))
       setReady(true)
       latest.current.onReady(map)
       emitBounds()
@@ -182,12 +205,14 @@ export function MapCanvas(props: Props) {
       map.remove()
       mapRef.current = undefined
       columnsRef.current = undefined
+      clearHoverRef.current = undefined
     }
   }, [])
 
   useEffect(() => {
     const map = mapRef.current
     if (!map || !ready || !map.getSource('prices')) return
+    clearHoverRef.current?.()
     container.current?.setAttribute('data-rendered', 'false')
     latest.current.onRendered(false)
     ;(map.getSource('prices') as GeoJSONSource).setData(pointCollection(props.points, props.metric))
@@ -197,6 +222,7 @@ export function MapCanvas(props: Props) {
   useEffect(() => {
     const map = mapRef.current
     if (!map || !ready) return
+    clearHoverRef.current?.()
     const heat = props.mode === 'heatmap' && props.metric !== 'change'
     columnsRef.current?.setVisible(props.mode === '3d')
     map.setLayoutProperty('price-points', 'visibility', props.mode === '3d' ? 'none' : 'visible')

@@ -211,6 +211,10 @@ p {
   border-color: #d3e2dc;
   color: #2b7365;
 }
+.dataset-button.active:hover {
+  background: #dbece4;
+  border-color: #84b6a5;
+}
 .dataset-button:where(.active) strong {
   color: #225a50;
   font-weight: 650;
@@ -251,6 +255,10 @@ p {
   background: white;
   color: #314b4a;
   box-shadow: 0 1px 4px #1429360d;
+}
+.segmented button:not(:disabled):hover {
+  background: #deebe5;
+  color: #225a50;
 }
 .year-section label {
   display: block;
@@ -400,6 +408,11 @@ p {
 }
 .sidebar-footer button svg:last-child {
   margin-left: auto;
+}
+.sidebar-footer button:hover {
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 3px;
 }
 .map-workspace {
   --map-side: 28px;
@@ -705,6 +718,10 @@ p {
 .detail-heading .icon-button {
   color: #9db2bd;
 }
+.icon-button:not(:disabled):hover {
+  background: #789e9530;
+  border-radius: 7px;
+}
 .detail-category {
   font-size: 12px;
   color: #8cc4b3;
@@ -840,8 +857,7 @@ p {
 .spin {
   animation: spin 1.4s linear infinite;
 }
-.mobile-menu,
-.mobile-close {
+.sidebar-backdrop {
   display: none;
 }
 @keyframes spin {
@@ -942,42 +958,20 @@ p {
   .sidebar {
     position: absolute;
     inset: 0 auto 0 0;
-    width: 310px;
-    transform: translateX(-100%);
-    visibility: hidden;
-    transition:
-      transform 0.25s,
-      visibility 0.25s;
+    width: min(310px, calc(100vw - 24px));
     box-shadow: 10px 0 35px #0005;
   }
-  .sidebar.is-open {
-    transform: translateX(0);
-    visibility: visible;
-  }
-  .mobile-menu,
-  .mobile-close {
-    display: grid;
-  }
-  .mobile-close {
-    margin-left: auto;
+  .sidebar-backdrop {
+    display: block;
+    position: absolute;
+    inset: 0;
+    z-index: 4;
+    border: 0;
+    background: #07121e70;
   }
   .brand {
     padding-right: 16px;
   }
-  .mobile-menu {
-    position: absolute;
-    top: 14px;
-    left: 14px;
-    width: 44px;
-    height: 44px;
-    color: #d9e5e9;
-    background: #18242fe8;
-    border: 1px solid #3a47525c;
-    border-radius: 7px;
-    box-shadow: 0 4px 15px #030a1433;
-    backdrop-filter: blur(12px);
-  }
-
   .location-notice {
     left: 19px;
     top: 70px;
@@ -1017,6 +1011,10 @@ p {
   }
   .legend-toggle > svg:last-child {
     margin-left: auto;
+  }
+  .legend-toggle:hover {
+    color: #e6fff5;
+    background: #234139;
   }
   .legend[data-expanded="true"] .legend-toggle > svg:last-child {
     transform: rotate(180deg);
@@ -1443,5 +1441,112 @@ p {
   }
   .has-selection .map-context {
     visibility: hidden;
+  }
+}
+
+.sidebar-toggle {
+  margin-left: auto;
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+  color: #627a80;
+  border-radius: 7px;
+}
+
+.sidebar-toggle:hover {
+  color: var(--accent);
+  background: #eaf2ef;
+}
+.sidebar.is-collapsed {
+  width: 80px;
+}
+.sidebar.is-collapsed .brand {
+  padding: 20px 0;
+  justify-content: center;
+}
+.sidebar.is-collapsed .brand-mark,
+.sidebar.is-collapsed .brand h1,
+.sidebar.is-collapsed .section-heading,
+.sidebar.is-collapsed .dataset-button small,
+.sidebar.is-collapsed .dataset-button > svg:last-child,
+.sidebar.is-collapsed .selected-check {
+  display: none;
+}
+.sidebar.is-collapsed .sidebar-toggle {
+  margin-left: 0;
+  width: 44px;
+  height: 44px;
+}
+.sidebar.is-collapsed .sidebar-content {
+  padding: 18px 8px;
+}
+.sidebar.is-collapsed .dataset-list {
+  gap: 10px;
+}
+.sidebar.is-collapsed .dataset-button {
+  flex-direction: column;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px 2px;
+  min-height: 68px;
+  text-align: center;
+}
+.sidebar.is-collapsed .dataset-button strong {
+  font-size: 11px;
+  white-space: nowrap;
+}
+.sidebar.is-collapsed .dataset-button.active {
+  box-shadow: inset 3px 0 #39806e;
+}
+.sidebar [hidden] {
+  display: none;
+}
+
+@media (max-width: 800px) {
+  .sidebar.is-collapsed {
+    inset: 14px auto auto 14px;
+    width: auto;
+    max-width: calc(100vw - 28px);
+    height: 60px;
+    flex-direction: row;
+    border: 1px solid #e0e8e6;
+    border-radius: 12px;
+    box-shadow: 0 6px 24px #030a1433;
+  }
+  .sidebar.is-collapsed .brand {
+    padding: 7px 5px;
+    border-bottom: 0;
+    border-right: 1px solid var(--line);
+  }
+  .sidebar.is-collapsed .sidebar-content {
+    padding: 5px;
+    overflow: visible;
+  }
+  .sidebar.is-collapsed .dataset-list {
+    flex-direction: row;
+    gap: 3px;
+  }
+  .sidebar.is-collapsed .dataset-button {
+    width: 62px;
+    min-height: 48px;
+    padding: 5px 3px;
+    gap: 3px;
+  }
+  .sidebar.is-collapsed .dataset-button > svg {
+    width: 18px;
+    height: 18px;
+  }
+  .sidebar.is-collapsed .dataset-button strong {
+    font-size: 10px;
+  }
+  .sidebar.is-collapsed .dataset-button.active {
+    box-shadow: inset 0 -2px #39806e;
+  }
+  .location-notice {
+    top: 86px;
+    max-width: calc(100% - 145px);
+  }
+  .mode-control {
+    top: 86px;
   }
 }

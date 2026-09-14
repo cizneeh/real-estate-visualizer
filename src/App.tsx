@@ -14,6 +14,8 @@ import {
   LocateFixed,
   MapPin,
   Minus,
+  PanelLeftClose,
+  PanelLeftOpen,
   Plus,
   SlidersHorizontal,
   Sparkles,
@@ -71,7 +73,16 @@ export function App() {
   const [map, setMap] = useState<LibreMap>()
   const [mapRendered, setMapRendered] = useState(false)
   const [selection, setSelection] = useState<PointSelection>()
-  const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [sidebarOpen, setSidebarOpen] = useState(
+    () => window.matchMedia('(min-width: 801px)').matches,
+  )
+  const sidebarToggle = useRef<HTMLButtonElement>(null)
+  useEffect(() => {
+    const desktop = window.matchMedia('(min-width: 801px)')
+    const update = () => setSidebarOpen(desktop.matches)
+    desktop.addEventListener('change', update)
+    return () => desktop.removeEventListener('change', update)
+  }, [])
   const years = useMemo(() => yearsForDataset(dataset), [dataset])
   const [legendOpen, setLegendOpen] = useState(false)
   const infoDialog = useRef<HTMLDialogElement>(null)
@@ -136,31 +147,56 @@ export function App() {
 
   function showJapan() {
     setSelection(undefined)
-    setSidebarOpen(false)
+    if (window.matchMedia('(max-width: 800px)').matches) setSidebarOpen(false)
     map?.fitBounds(JAPAN_BOUNDS, { padding: 40, pitch: 0, bearing: 0, duration: 1200 })
   }
 
   function focusPoint(point: PricePoint) {
     handleSelect(point)
-    setSidebarOpen(false)
+    if (window.matchMedia('(max-width: 800px)').matches) setSidebarOpen(false)
     map?.easeTo({ center: point.coordinates, duration: 800 })
   }
 
   return (
     <main className="atlas">
-      <aside className={`sidebar ${sidebarOpen ? 'is-open' : ''}`}>
+      {sidebarOpen && (
+        <button
+          className="sidebar-backdrop"
+          type="button"
+          aria-label="データパネルを閉じる"
+          tabIndex={-1}
+          onClick={() => {
+            setSidebarOpen(false)
+            sidebarToggle.current?.focus()
+          }}
+        />
+      )}
+      <aside
+        className={`sidebar ${sidebarOpen ? 'is-open' : 'is-collapsed'}`}
+        aria-label="表示データの設定"
+        onKeyDown={(event) => {
+          if (event.key === 'Escape' && sidebarOpen) {
+            setSidebarOpen(false)
+            sidebarToggle.current?.focus()
+          }
+        }}
+      >
         <header className="brand">
           <div className="brand-mark">
             <Layers3 size={24} strokeWidth={1.5} />
           </div>
           <h1>街の値段</h1>
           <button
-            className="icon-button mobile-close"
+            ref={sidebarToggle}
+            className="icon-button sidebar-toggle"
             type="button"
-            aria-label="パネルを閉じる"
-            onClick={() => setSidebarOpen(false)}
+            aria-label={sidebarOpen ? 'データパネルを閉じる' : 'データパネルを開く'}
+            title={sidebarOpen ? 'データパネルを閉じる' : 'データパネルを開く'}
+            aria-expanded={sidebarOpen}
+            aria-controls="sidebar-details"
+            onClick={() => setSidebarOpen((open) => !open)}
           >
-            <X size={20} />
+            {sidebarOpen ? <PanelLeftClose size={20} /> : <PanelLeftOpen size={20} />}
           </button>
         </header>
 
@@ -176,11 +212,13 @@ export function App() {
                     type="button"
                     className={`dataset-button ${dataset === id ? 'active' : ''}`}
                     aria-pressed={dataset === id}
+                    aria-label={`${name} ${description}`}
+                    title={`${name}：${description}`}
                     onClick={() => changeDataset(id)}
                   >
                     <Icon size={20} strokeWidth={1.6} />
                     <span>
-                      <strong>{name}</strong>
+                      <strong>{sidebarOpen || id !== 'transactions' ? name : '取引'}</strong>
                       <small>{description}</small>
                     </span>
                     {dataset === id ? (
@@ -191,171 +229,173 @@ export function App() {
                       <ChevronRight size={15} />
                     )}
                   </button>
-                  {id === 'land' && <LandPriceHelp />}
+                  {id === 'land' && sidebarOpen && <LandPriceHelp />}
                 </div>
               ))}
             </div>
           </section>
 
-          <section className="metric-section" aria-labelledby="metric-title">
-            <div className="section-heading">
-              <h3 id="metric-title">表示する指標</h3>
-              <TrendingUp size={14} />
-            </div>
-            <div className="segmented metric-controls">
-              {(
-                [
-                  { id: 'price', label: '価格' },
-                  { id: 'change', label: '前年比（%）' },
-                ] as const
-              ).map(({ id, label }) => (
-                <button
-                  key={id}
-                  type="button"
-                  aria-pressed={metric === id}
-                  className={metric === id ? 'active' : ''}
-                  disabled={id === 'change' && dataset === 'transactions'}
-                  onClick={() => {
-                    setMetric(id)
-                    if (id === 'change' && mode === 'heatmap') setMode('points')
-                  }}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
-            <p className="metric-description">
-              {dataset === 'transactions'
-                ? '駅周辺の取引単価の中央値。前年比は未対応です。'
-                : metric === 'change'
-                  ? `${year - 1}年から${year}年への価格の変化率`
-                  : '選択した年の土地1㎡あたりの価格'}
-            </p>
-          </section>
-
-          {dataset !== 'transactions' && (
-            <section className="category-section" aria-labelledby="category-title">
+          <div id="sidebar-details" hidden={!sidebarOpen}>
+            <section className="metric-section" aria-labelledby="metric-title">
               <div className="section-heading">
-                <h3 id="category-title">土地の用途</h3>
-                <SlidersHorizontal size={14} />
+                <h3 id="metric-title">表示する指標</h3>
+                <TrendingUp size={14} />
               </div>
-              <div className="segmented category-controls">
-                {['すべて', '住宅地', '商業地'].map((value) => (
+              <div className="segmented metric-controls">
+                {(
+                  [
+                    { id: 'price', label: '価格' },
+                    { id: 'change', label: '前年比（%）' },
+                  ] as const
+                ).map(({ id, label }) => (
                   <button
-                    key={value}
+                    key={id}
                     type="button"
-                    aria-pressed={category === value}
-                    className={category === value ? 'active' : ''}
+                    aria-pressed={metric === id}
+                    className={metric === id ? 'active' : ''}
+                    disabled={id === 'change' && dataset === 'transactions'}
                     onClick={() => {
-                      setCategory(value)
-                      setSelection(undefined)
+                      setMetric(id)
+                      if (id === 'change' && mode === 'heatmap') setMode('points')
                     }}
                   >
-                    {value}
+                    {label}
                   </button>
                 ))}
               </div>
-            </section>
-          )}
-
-          <div className="year-section">
-            <label htmlFor="target-year">対象年</label>
-            <select
-              id="target-year"
-              value={year}
-              onChange={(event) => setYear(Number(event.target.value))}
-            >
-              {years.map((value) => (
-                <option key={value} value={value}>
-                  {value}年
-                </option>
-              ))}
-            </select>
-            <p className="year-period" aria-live="polite">
-              {displayPeriodLabel(dataset, metric, year)}
-            </p>
-          </div>
-
-          <section
-            className={`area-summary ${loading ? 'is-loading' : ''}`}
-            aria-labelledby="summary-title"
-          >
-            <div className="section-heading">
-              <h3 id="summary-title">
-                {dataset === 'transactions' ? '駅別中央値の中央値' : '表示範囲の中央値'}
-              </h3>
-              <span>
-                {loading
-                  ? `${points.length.toLocaleString()}地点・取得途中`
-                  : `${points.length.toLocaleString()}地点`}
-              </span>
-            </div>
-            <div className="big-metric">
-              {metric === 'change' ? changeLabel(medianChange) : priceLabel(midpoint)}
-              {metric !== 'change' && <small>万円 / ㎡</small>}
-            </div>
-            <div className="summary-foot">
-              {dataset === 'transactions' ? (
-                <>
-                  <Building2 size={14} /> {rawPoints.length.toLocaleString()}
-                  件の取引を駅の位置で集計
-                </>
-              ) : (
-                <>
-                  <TrendingUp size={14} />
-                  <span>
-                    前年比 <strong>{changeLabel(medianChange)}</strong>
-                  </span>
-                </>
-              )}
-            </div>
-          </section>
-
-          <section className="ranking" aria-labelledby="ranking-title">
-            <div className="section-heading">
-              <h3 id="ranking-title">
-                {metric === 'change'
-                  ? '表示領域の中で上昇率の高い地点'
-                  : '表示領域の中で価格の高い地点'}
-              </h3>
-            </div>
-            {ranking.length ? (
-              ranking.map((point, i) => (
-                <button
-                  type="button"
-                  className="rank-row"
-                  key={point.id}
-                  onClick={() => focusPoint(point)}
-                >
-                  <span className="rank-number">0{i + 1}</span>
-                  <span className="rank-label">
-                    <strong>{point.address || point.municipality}</strong>
-                    <small>
-                      {point.count !== undefined
-                        ? `${point.count}件の取引`
-                        : point.station
-                          ? stationAreaLabel(point.station)
-                          : point.category}
-                    </small>
-                  </span>
-                  <span className="rank-value">
-                    {formatMetric(point)}
-                    <ArrowUpRight size={13} />
-                  </span>
-                </button>
-              ))
-            ) : (
-              <p className="empty-ranking">
-                {loading
-                  ? '地図の範囲からデータを取得しています'
-                  : currentData?.zoomRequired
-                    ? '見たい地域を拡大してください'
-                    : 'この範囲には対象地点がありません'}
+              <p className="metric-description">
+                {dataset === 'transactions'
+                  ? '駅周辺の取引単価の中央値。前年比は未対応です。'
+                  : metric === 'change'
+                    ? `${year - 1}年から${year}年への価格の変化率`
+                    : '選択した年の土地1㎡あたりの価格'}
               </p>
+            </section>
+
+            {dataset !== 'transactions' && (
+              <section className="category-section" aria-labelledby="category-title">
+                <div className="section-heading">
+                  <h3 id="category-title">土地の用途</h3>
+                  <SlidersHorizontal size={14} />
+                </div>
+                <div className="segmented category-controls">
+                  {['すべて', '住宅地', '商業地'].map((value) => (
+                    <button
+                      key={value}
+                      type="button"
+                      aria-pressed={category === value}
+                      className={category === value ? 'active' : ''}
+                      onClick={() => {
+                        setCategory(value)
+                        setSelection(undefined)
+                      }}
+                    >
+                      {value}
+                    </button>
+                  ))}
+                </div>
+              </section>
             )}
-          </section>
+
+            <div className="year-section">
+              <label htmlFor="target-year">対象年</label>
+              <select
+                id="target-year"
+                value={year}
+                onChange={(event) => setYear(Number(event.target.value))}
+              >
+                {years.map((value) => (
+                  <option key={value} value={value}>
+                    {value}年
+                  </option>
+                ))}
+              </select>
+              <p className="year-period" aria-live="polite">
+                {displayPeriodLabel(dataset, metric, year)}
+              </p>
+            </div>
+
+            <section
+              className={`area-summary ${loading ? 'is-loading' : ''}`}
+              aria-labelledby="summary-title"
+            >
+              <div className="section-heading">
+                <h3 id="summary-title">
+                  {dataset === 'transactions' ? '駅別中央値の中央値' : '表示範囲の中央値'}
+                </h3>
+                <span>
+                  {loading
+                    ? `${points.length.toLocaleString()}地点・取得途中`
+                    : `${points.length.toLocaleString()}地点`}
+                </span>
+              </div>
+              <div className="big-metric">
+                {metric === 'change' ? changeLabel(medianChange) : priceLabel(midpoint)}
+                {metric !== 'change' && <small>万円 / ㎡</small>}
+              </div>
+              <div className="summary-foot">
+                {dataset === 'transactions' ? (
+                  <>
+                    <Building2 size={14} /> {rawPoints.length.toLocaleString()}
+                    件の取引を駅の位置で集計
+                  </>
+                ) : (
+                  <>
+                    <TrendingUp size={14} />
+                    <span>
+                      前年比 <strong>{changeLabel(medianChange)}</strong>
+                    </span>
+                  </>
+                )}
+              </div>
+            </section>
+
+            <section className="ranking" aria-labelledby="ranking-title">
+              <div className="section-heading">
+                <h3 id="ranking-title">
+                  {metric === 'change'
+                    ? '表示領域の中で上昇率の高い地点'
+                    : '表示領域の中で価格の高い地点'}
+                </h3>
+              </div>
+              {ranking.length ? (
+                ranking.map((point, i) => (
+                  <button
+                    type="button"
+                    className="rank-row"
+                    key={point.id}
+                    onClick={() => focusPoint(point)}
+                  >
+                    <span className="rank-number">0{i + 1}</span>
+                    <span className="rank-label">
+                      <strong>{point.address || point.municipality}</strong>
+                      <small>
+                        {point.count !== undefined
+                          ? `${point.count}件の取引`
+                          : point.station
+                            ? stationAreaLabel(point.station)
+                            : point.category}
+                      </small>
+                    </span>
+                    <span className="rank-value">
+                      {formatMetric(point)}
+                      <ArrowUpRight size={13} />
+                    </span>
+                  </button>
+                ))
+              ) : (
+                <p className="empty-ranking">
+                  {loading
+                    ? '地図の範囲からデータを取得しています'
+                    : currentData?.zoomRequired
+                      ? '見たい地域を拡大してください'
+                      : 'この範囲には対象地点がありません'}
+                </p>
+              )}
+            </section>
+          </div>
         </div>
-        <footer className="sidebar-footer">
+        <footer className="sidebar-footer" hidden={!sidebarOpen}>
           <button type="button" onClick={() => infoDialog.current?.showModal()}>
             <Info size={15} />
             データ・表示について
@@ -381,15 +421,6 @@ export function App() {
           onRendered={handleRendered}
         />
         <div className="map-vignette" />
-        <button
-          type="button"
-          className="icon-button mobile-menu"
-          aria-label="データパネルを開く"
-          onClick={() => setSidebarOpen(true)}
-        >
-          <SlidersHorizontal size={18} />
-        </button>
-
         {(locating || locationError) && (
           <div className="location-notice" aria-live="polite">
             {locating ? <LoaderCircle size={14} className="spin" /> : <Info size={14} />}

@@ -137,7 +137,7 @@ export function configureBasemap(map: LibreMap) {
     },
   })
 
-  map.addSource('major-stations', { type: 'geojson', data: MAJOR_STATION_DATA })
+  map.addSource('major-stations', { type: 'geojson', data: MAJOR_STATION_DATA, generateId: true })
   map.addLayer({
     id: 'major-station-labels',
     type: 'symbol',

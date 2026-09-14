@@ -143,7 +143,8 @@ try {
   })
   await page.screenshot({ path: `${destination}/history-fixture-desktop.png`, fullPage: true })
   await page.setViewportSize({ width: 390, height: 844 })
-  await expect(page.locator('.sidebar')).toBeHidden()
+  await expect(page.locator('.sidebar')).toHaveClass(/is-collapsed/)
+  await expect(page.getByRole('combobox', { name: '対象年' })).toBeHidden()
   await detail.locator('.detail-scroll').evaluate((element) => {
     element.scrollTop = 0
   })
