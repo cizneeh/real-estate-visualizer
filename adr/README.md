@@ -17,6 +17,8 @@
 | [公示地価と基準地価を土地価格にまとめ、同一地点は対象年の最新値を表示する](0011-unified-land-prices.md) | 採用 |
 | [取引の駅座標を国交省の駅データと照合して駅名を表示する](0012-transaction-station-names.md) | 採用 |
 | [表示中の地名から移動し、価格データの選択を優先する](0013-map-label-navigation.md) | 採用 |
+| [実行環境が提供する環境変数読込と型生成を使う](0014-runtime-types-and-env.md) | 採用 |
+| [CIで確認したDependabotの更新をmajorも含めて自動マージする](0015-tested-dependency-updates.md) | 採用 |
 
 ## 記録する内容
 
