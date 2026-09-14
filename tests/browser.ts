@@ -91,14 +91,14 @@ try {
   await expect(page.getByRole('combobox', { name: '対象年' })).toHaveValue('2024')
   console.log('PASS: Naha geolocation, point mode, annual change, year selection')
 
-  await page.getByRole('button', { name: /基準地価 7月1日時点の土地の価格/ }).click()
+  await page.getByRole('button', { name: /土地価格 土地1㎡あたりの価格/ }).click()
   await page.getByRole('button', { name: '価格', exact: true }).click()
   await ready()
   await page.getByTitle('ヒート表示', { exact: true }).click()
   await ready()
   await page.screenshot({ path: `${destination}/land-survey-heatmap.png`, fullPage: true })
 
-  await page.getByRole('button', { name: /マンション取引 中古マンション等の実取引/ }).click()
+  await page.getByRole('button', { name: /マンション取引価格 中古マンション等の実取引/ }).click()
   await ready()
   await expect(page.locator('.summary-foot')).toContainText('件の取引')
   await page.getByTitle('ポイント表示', { exact: true }).click()

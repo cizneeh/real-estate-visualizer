@@ -23,7 +23,8 @@ import {
 } from 'lucide-react'
 import type { Map as LibreMap } from 'maplibre-gl'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { matchHistoryPoint, periodLabel } from './history'
+import { displayPeriodLabel, matchLandHistoryPoint } from './history'
+import { LandPriceHelp } from './LandPriceHelp'
 import { MapCanvas } from './MapCanvas'
 import {
   CHANGE_COLORS,
@@ -36,7 +37,7 @@ import {
 import { PointDetails, type PointSelection } from './PointDetails'
 import {
   type Bounds,
-  type Dataset,
+  type DisplayDataset,
   JAPAN_BOUNDS,
   type Metric,
   type PricePoint,
@@ -47,12 +48,11 @@ import { useMapTools } from './useMapTools'
 import { usePriceTiles } from './usePriceTiles'
 import { FIRST_YEAR, yearsForDataset } from './years'
 
-const DATASETS: { id: Dataset; name: string; description: string; icon: typeof MapPin }[] = [
-  { id: 'land', name: '公示地価', description: '1月1日時点の土地の価格', icon: Layers3 },
-  { id: 'survey', name: '基準地価', description: '7月1日時点の土地の価格', icon: MapPin },
+const DATASETS: { id: DisplayDataset; name: string; description: string; icon: typeof MapPin }[] = [
+  { id: 'land', name: '土地価格', description: '土地1㎡あたりの価格', icon: Layers3 },
   {
     id: 'transactions',
-    name: 'マンション取引',
+    name: 'マンション取引価格',
     description: '中古マンション等の実取引',
     icon: Building2,
   },
@@ -60,7 +60,7 @@ const DATASETS: { id: Dataset; name: string; description: string; icon: typeof M
 const EMPTY_POINTS: PricePoint[] = []
 
 export function App() {
-  const [dataset, setDataset] = useState<Dataset>('land')
+  const [dataset, setDataset] = useState<DisplayDataset>('land')
   const [metric, setMetric] = useState<Metric>('price')
   const [year, setYear] = useState(2026)
   const [mode, setMode] = useState<ViewMode>('3d')
@@ -105,7 +105,7 @@ export function App() {
     selection &&
     (dataset === 'transactions'
       ? points.find((point) => point.id === selection.point.id)
-      : (matchHistoryPoint(selection.point, points) ??
+      : (matchLandHistoryPoint(selection.point, points) ??
         (year === selection.year
           ? points.find((point) => point.id === selection.point.id)
           : undefined)))
@@ -126,7 +126,7 @@ export function App() {
   const formatMetric = (point: PricePoint) =>
     metric === 'change' ? changeLabel(point.change) : priceLabel(point.price)
 
-  function changeDataset(next: Dataset) {
+  function changeDataset(next: DisplayDataset) {
     setDataset(next)
     setYear((value) => Math.max(FIRST_YEAR[next], value))
     setSelection(undefined)
@@ -170,26 +170,28 @@ export function App() {
             </div>
             <div className="dataset-list">
               {DATASETS.map(({ id, name, description, icon: Icon }) => (
-                <button
-                  key={id}
-                  type="button"
-                  className={`dataset-button ${dataset === id ? 'active' : ''}`}
-                  aria-pressed={dataset === id}
-                  onClick={() => changeDataset(id)}
-                >
-                  <Icon size={20} strokeWidth={1.6} />
-                  <span>
-                    <strong>{name}</strong>
-                    <small>{description}</small>
-                  </span>
-                  {dataset === id ? (
-                    <span className="selected-check">
-                      <Check size={12} />
+                <div className="dataset-option" key={id}>
+                  <button
+                    type="button"
+                    className={`dataset-button ${dataset === id ? 'active' : ''}`}
+                    aria-pressed={dataset === id}
+                    onClick={() => changeDataset(id)}
+                  >
+                    <Icon size={20} strokeWidth={1.6} />
+                    <span>
+                      <strong>{name}</strong>
+                      <small>{description}</small>
                     </span>
-                  ) : (
-                    <ChevronRight size={15} />
-                  )}
-                </button>
+                    {dataset === id ? (
+                      <span className="selected-check">
+                        <Check size={12} />
+                      </span>
+                    ) : (
+                      <ChevronRight size={15} />
+                    )}
+                  </button>
+                  {id === 'land' && <LandPriceHelp />}
+                </div>
               ))}
             </div>
           </section>
@@ -269,7 +271,7 @@ export function App() {
               ))}
             </select>
             <p className="year-period" aria-live="polite">
-              {periodLabel(dataset, metric, year)}
+              {displayPeriodLabel(dataset, metric, year)}
             </p>
           </div>
 
@@ -576,19 +578,20 @@ export function App() {
         </p>
         <h3>価格の読み方</h3>
         <p>
-          公示地価は1月1日、基準地価は7月1日時点の土地1㎡あたりの価格です。マンション取引は土地の価格とは異なるため、直接比較できません。公表前の年度や対象地点のない範囲は空になります。
+          土地価格は、公示地価（1月1日）と基準地価（7月1日）をまとめた土地1㎡あたりの価格です。選択した年に両方ある同一地点は最新値を採用し、別の地点はそれぞれ表示します。マンション取引は土地の価格とは異なるため、直接比較できません。公表前の年度や対象地点のない範囲は空になります。
         </p>
         <p>
-          公示地価・前年比は{FIRST_YEAR.land}年、基準地価は{FIRST_YEAR.survey}年、マンション取引は
+          土地価格は{FIRST_YEAR.land}年から選べ、{FIRST_YEAR.survey}
+          年以降は基準地価も含みます。マンション取引価格は
           {FIRST_YEAR.transactions}
-          年から選べます。2005年の取引は7〜12月のみです。前年比は変動率が提供されている地点だけを表示します。
+          年から選べます。2005年の取引は7〜12月のみです。前年比は採用した調査の前年値との比較で、変動率が提供されている地点だけを表示します。
         </p>
         <p>
           マンション取引は中古マンション等の取引価格情報を使用します。各取引の総額を面積で割り、同じ最寄り駅の座標ごとに中央値を算出しています。面積が「以上」等で表された取引は計算から除きます。地点の高さや地図上の位置は、建物の高さや物件所在地を表しません。
         </p>
         <h3>地点の価格推移</h3>
         <p>
-          公示地価・基準地価の地点を選ぶと、対象年までの価格推移を表示します。初期表示は5年前からで、10年前から・全期間に切り替えられます。識別番号・所在地・位置から同じ地点と確認できた年のみ表示し、欠測や地点変更の前後は線をつなぎません。推移は選んだ地点周辺のデータから取得します。マンション取引の推移は未対応です。
+          土地価格の地点を選ぶと、各年の最新の公開価格で対象年までの価格推移を表示します。初期表示は5年前からで、10年前から・全期間に切り替えられます。識別番号・所在地・位置から同じ地点と確認できた年のみ表示し、欠測や地点変更の前後は線をつなぎません。推移は選んだ地点周辺のデータから取得します。マンション取引の推移は未対応です。
         </p>
         <h3>集計と可視化</h3>
         <p>

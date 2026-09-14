@@ -163,7 +163,7 @@ try {
       (request) =>
         request.year === '2023' && request.priority === 'visible' && request.key !== centerKey,
     )
-    .map((request) => request.key)
+    .map((request) => ({ key: request.key, dataset: request.dataset }))
   const beforeRetry = requests.filter(
     (request) => request.year === '2023' && request.key === centerKey,
   ).length
@@ -172,13 +172,16 @@ try {
   await ready()
   assert.equal(
     requests.filter((request) => request.year === '2023' && request.key === centerKey).length,
-    beforeRetry + 1,
+    beforeRetry + 2,
   )
-  for (const key of successfulKeys) {
+  for (const { key, dataset } of successfulKeys) {
     assert.equal(
       requests.filter(
         (request) =>
-          request.year === '2023' && request.priority === 'visible' && request.key === key,
+          request.year === '2023' &&
+          request.priority === 'visible' &&
+          request.key === key &&
+          request.dataset === dataset,
       ).length,
       1,
     )

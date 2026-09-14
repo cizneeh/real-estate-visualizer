@@ -30,6 +30,7 @@ export function PriceHistoryChart({ entries, selectedYear }: Props) {
       <div className="history-readout" aria-live="polite">
         <span>
           {current?.year}年{current?.year === selectedYear ? ' · 地図の対象年' : ''}
+          {current?.point?.source && ` · ${current.point.source === 'survey' ? 7 : 1}月1日時点`}
         </span>
         {current?.point ? (
           <strong>
@@ -145,6 +146,11 @@ export function PriceHistoryChart({ entries, selectedYear }: Props) {
                     aria-label={`${entry.year}年の値を確認`}
                   >
                     {entry.year}
+                    {entry.point?.source && (
+                      <small className="history-date">
+                        {entry.point.source === 'survey' ? 7 : 1}月1日
+                      </small>
+                    )}
                     {entry.year === selectedYear && (
                       <span className="sr-only">（地図の対象年）</span>
                     )}
