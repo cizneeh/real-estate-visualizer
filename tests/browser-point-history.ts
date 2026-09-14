@@ -58,8 +58,14 @@ await page.route('**/api/tiles/**', async (route) => {
 
 try {
   await page.goto(origin)
+  await expect(page.getByRole('combobox', { name: '対象年' })).toHaveValue('2026')
+  await page.getByRole('combobox', { name: '対象年' }).selectOption('2025')
   await expect(page.locator('.rank-row').first()).toBeVisible()
-  assert.ok(requests.every((url) => new URL(url, origin).searchParams.get('year') === '2025'))
+  assert.ok(
+    requests.every((url) =>
+      ['2025', '2026'].includes(new URL(url, origin).searchParams.get('year') ?? ''),
+    ),
+  )
   await page.locator('.rank-row').first().click()
   const detail = page.getByRole('complementary', { name: '地点の詳細' })
   const history = detail.getByRole('region', { name: '価格の推移' })
@@ -86,16 +92,16 @@ try {
     requests.filter((url) => url.includes(`${centerKey}?`) && url.includes('year=2025')).length
   const before = currentTileRequests()
   await page.getByRole('button', { name: '前年比（%）', exact: true }).click()
-  await expect(page.locator('.timeline-period')).toContainText('2024年1月1日 → 2025年1月1日')
+  await expect(page.locator('.year-period')).toContainText('2024年1月1日 → 2025年1月1日')
   await expect(detail).toBeVisible()
   assert.equal(currentTileRequests(), before)
   await expect(page.getByTitle('前年比は3Dまたはポイントで表示します')).toBeDisabled()
-  await page.getByRole('button', { name: '2023年を表示', exact: true }).click()
+  await page.getByRole('combobox', { name: '対象年' }).selectOption('2023')
   await expect(detail).toBeVisible()
   await expect(history).toHaveAttribute('aria-busy', 'false')
   await expect(detail.locator('.detail-price')).toContainText('130')
   await expect(history.locator('.history-heading')).toContainText('2018〜2023年')
-  await expect(page.locator('.timeline-period')).toContainText('2022年1月1日 → 2023年1月1日')
+  await expect(page.locator('.year-period')).toContainText('2022年1月1日 → 2023年1月1日')
   await expect(history.getByRole('alert')).toContainText('一部の年')
   await expect(detail.locator('tr').filter({ hasText: '2018' })).toContainText('80')
   fail2019 = false
@@ -107,15 +113,12 @@ try {
   await history.locator('.history-hit').first().focus()
   await page.keyboard.press('Enter')
   await expect(history.locator('.history-readout')).toContainText('2018年')
-  await expect(page.getByRole('button', { name: '2023年を表示', exact: true })).toHaveAttribute(
-    'aria-pressed',
-    'true',
-  )
-  await page.getByRole('button', { name: '2021年を表示', exact: true }).click()
+  await expect(page.getByRole('combobox', { name: '対象年' })).toHaveValue('2023')
+  await page.getByRole('combobox', { name: '対象年' }).selectOption('2021')
   await expect(detail.locator('.detail-period')).toContainText('2021年1月1日')
   await expect(detail.locator('.detail-unavailable')).toContainText('データなし')
   await expect(detail.locator('.detail-price')).toHaveCount(0)
-  await page.getByRole('button', { name: '2025年を表示', exact: true }).click()
+  await page.getByRole('combobox', { name: '対象年' }).selectOption('2025')
   await expect(detail.locator('.detail-price')).toContainText('150')
   await detail.getByRole('button', { name: '10年前から' }).click()
   await expect(history).toHaveAttribute('aria-busy', 'false')
@@ -141,8 +144,8 @@ try {
   await expect(detail).toBeVisible()
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false)
   const panelBox = await detail.boundingBox()
-  const timelineBox = await page.locator('.timeline').boundingBox()
-  assert.ok(panelBox && timelineBox && panelBox.y + panelBox.height < timelineBox.y)
+  const controlsBox = await page.locator('.zoom-controls').boundingBox()
+  assert.ok(panelBox && controlsBox && panelBox.x + panelBox.width < controlsBox.x)
   await page.screenshot({ path: `${destination}/history-fixture-mobile.png`, fullPage: true })
   await detail.getByRole('button', { name: '詳細を閉じる' }).click()
   await page.getByRole('button', { name: 'データパネルを開く' }).click()

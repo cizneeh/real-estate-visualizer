@@ -14,8 +14,6 @@ import {
   LocateFixed,
   MapPin,
   Minus,
-  Pause,
-  Play,
   Plus,
   SlidersHorizontal,
   Sparkles,
@@ -47,7 +45,7 @@ import {
 import { useCurrentLocation } from './useCurrentLocation'
 import { useMapTools } from './useMapTools'
 import { usePriceTiles } from './usePriceTiles'
-import { FIRST_YEAR, LAST_YEAR, yearsForDataset } from './years'
+import { FIRST_YEAR, yearsForDataset } from './years'
 
 const DATASETS: { id: Dataset; name: string; description: string; icon: typeof MapPin }[] = [
   { id: 'land', name: '公示地価', description: '1月1日時点の土地の価格', icon: Layers3 },
@@ -64,7 +62,7 @@ const EMPTY_POINTS: PricePoint[] = []
 export function App() {
   const [dataset, setDataset] = useState<Dataset>('land')
   const [metric, setMetric] = useState<Metric>('price')
-  const [year, setYear] = useState(2025)
+  const [year, setYear] = useState(2026)
   const [mode, setMode] = useState<ViewMode>('3d')
   const [category, setCategory] = useState('すべて')
   const [bounds, setBounds] = useState<Bounds>()
@@ -72,9 +70,7 @@ export function App() {
   const [map, setMap] = useState<LibreMap>()
   const [mapRendered, setMapRendered] = useState(false)
   const [selection, setSelection] = useState<PointSelection>()
-  const [playing, setPlaying] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(false)
-  const yearSelector = useRef<HTMLDivElement>(null)
   const years = useMemo(() => yearsForDataset(dataset), [dataset])
   const [legendOpen, setLegendOpen] = useState(false)
   const infoDialog = useRef<HTMLDialogElement>(null)
@@ -83,7 +79,6 @@ export function App() {
   const handleSelect = useCallback(
     (point: PricePoint) => {
       setSelection({ point, year })
-      setPlaying(false)
     },
     [year],
   )
@@ -94,25 +89,6 @@ export function App() {
     if (!position) return
     setSelection(undefined)
   }, [position])
-
-  useEffect(() => {
-    if (error) setPlaying(false)
-  }, [error])
-
-  useEffect(() => {
-    yearSelector.current?.children
-      .item(years.indexOf(year))
-      ?.scrollIntoView({ block: 'nearest', inline: 'center' })
-  }, [year, years])
-
-  useEffect(() => {
-    if (!playing || loading || !mapRendered || error) return
-    const timer = window.setTimeout(
-      () => setYear(year >= LAST_YEAR ? FIRST_YEAR[dataset] : year + 1),
-      2400,
-    )
-    return () => window.clearTimeout(timer)
-  }, [playing, loading, mapRendered, error, dataset, year])
 
   const currentData = data?.dataset === dataset && data.year === year ? data : undefined
   const showZoomHint = currentData?.zoomRequired && !loading && mapRendered && !error
@@ -154,13 +130,7 @@ export function App() {
     setDataset(next)
     setYear((value) => Math.max(FIRST_YEAR[next], value))
     setSelection(undefined)
-    setPlaying(false)
     if (next === 'transactions') setMetric('price')
-  }
-
-  function changeYear(next: number) {
-    setPlaying(false)
-    setYear(next)
   }
 
   function showJapan() {
@@ -244,7 +214,6 @@ export function App() {
                   disabled={id === 'change' && dataset === 'transactions'}
                   onClick={() => {
                     setMetric(id)
-                    setPlaying(false)
                     if (id === 'change' && mode === 'heatmap') setMode('points')
                   }}
                 >
@@ -285,6 +254,24 @@ export function App() {
               </div>
             </section>
           )}
+
+          <div className="year-section">
+            <label htmlFor="target-year">対象年</label>
+            <select
+              id="target-year"
+              value={year}
+              onChange={(event) => setYear(Number(event.target.value))}
+            >
+              {years.map((value) => (
+                <option key={value} value={value}>
+                  {value}年
+                </option>
+              ))}
+            </select>
+            <p className="year-period" aria-live="polite">
+              {periodLabel(dataset, metric, year)}
+            </p>
+          </div>
 
           <section
             className={`area-summary ${loading ? 'is-loading' : ''}`}
@@ -568,56 +555,6 @@ export function App() {
             <button type="button" aria-label="全国を表示" title="全国を表示" onClick={showJapan}>
               <Globe2 size={17} />
             </button>
-          </div>
-          <div className="timeline-group">
-            <p className="timeline-period" aria-live="polite">
-              {periodLabel(dataset, metric, year)}
-            </p>
-            <div className="timeline">
-              <label className="timeline-label">
-                <span>対象年</span>
-                <select
-                  aria-label="対象年"
-                  value={year}
-                  onChange={(event) => changeYear(Number(event.target.value))}
-                >
-                  {years.map((value) => (
-                    <option key={value} value={value}>
-                      {value}年
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <button
-                type="button"
-                className={`play-button ${playing ? 'playing' : ''}`}
-                aria-label={playing ? '年度の自動再生を停止' : '年度を自動再生'}
-                aria-pressed={playing}
-                onClick={() => setPlaying(!playing)}
-              >
-                {playing ? (
-                  <Pause size={16} fill="currentColor" />
-                ) : (
-                  <Play size={16} fill="currentColor" />
-                )}
-              </button>
-              <div className="year-selector" ref={yearSelector}>
-                {years.map((value) => (
-                  <button
-                    key={value}
-                    type="button"
-                    aria-label={`${value}年を表示`}
-                    title={periodLabel(dataset, metric, value)}
-                    aria-pressed={year === value}
-                    className={year === value ? 'active' : ''}
-                    onClick={() => changeYear(value)}
-                  >
-                    <span className="year-tick" />
-                    <span>{value}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
           </div>
         </div>
       </section>

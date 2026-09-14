@@ -79,7 +79,7 @@ const contextOptions = {
   geolocation: { longitude: 139.7671, latitude: 35.6812 },
 }
 const center = tileKey(tileAt([139.7671, 35.6812]))
-const apiKey = `/api/tiles/${center}?dataset=land&year=2025`
+const apiKey = `/api/tiles/${center}?dataset=land&year=2026`
 const errors: string[] = []
 
 try {
@@ -89,7 +89,7 @@ try {
   await firstPage.goto(origin)
   await expect(firstPage.getByRole('status')).toContainText('地点を表示中', { timeout: 30_000 })
   assert.equal(apiRequests.get(apiKey), 1)
-  assert.equal(upstreamRequests.get(`${center}/2025`), 1)
+  assert.equal(upstreamRequests.get(`${center}/2026`), 1)
   await firstPage.close()
 
   const revisit = await firstUser.newPage()
@@ -108,7 +108,7 @@ try {
   await expect(secondPage.getByRole('status')).toContainText('地点を表示中')
   assert.equal(apiRequests.get(apiKey), 2, 'A separate user should contact the shared server cache')
   assert.equal(
-    upstreamRequests.get(`${center}/2025`),
+    upstreamRequests.get(`${center}/2026`),
     1,
     'The second user must not trigger another upstream fetch',
   )

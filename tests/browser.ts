@@ -86,7 +86,7 @@ try {
   await ready()
   await expect(page.locator('.big-metric')).toContainText('%')
   await expect(page.getByTitle('前年比は3Dまたはポイントで表示します')).toBeDisabled()
-  await page.getByRole('button', { name: '2024年を表示' }).click()
+  await page.getByRole('combobox', { name: '対象年' }).selectOption('2024')
   await ready()
   await expect(page.getByRole('combobox', { name: '対象年' })).toHaveValue('2024')
   console.log('PASS: Naha geolocation, point mode, annual change, year selection')
@@ -112,7 +112,7 @@ try {
       json: { error: '接続エラーの表示テスト' },
     }),
   )
-  await page.getByRole('button', { name: '2023年を表示' }).click()
+  await page.getByRole('combobox', { name: '対象年' }).selectOption('2023')
   await expect(page.getByRole('status')).toContainText('接続エラーの表示テスト')
   await page.unroute('**/api/tiles/**')
   await page.getByRole('button', { name: '再試行', exact: true }).click()
@@ -130,21 +130,15 @@ try {
       },
     }),
   )
-  await page.getByRole('button', { name: '2022年を表示' }).click()
+  await page.getByRole('combobox', { name: '対象年' }).selectOption('2022')
   await expect(page.getByRole('status')).toContainText('対象データがありません')
   await expect(page.locator('.big-metric')).toContainText('—')
   await page.unroute('**/api/tiles/**')
-  await page.getByRole('button', { name: '2023年を表示' }).click()
+  await page.getByRole('combobox', { name: '対象年' }).selectOption('2023')
   await ready()
-  await page.getByRole('button', { name: '年度を自動再生', exact: true }).click()
-  await expect(page.getByRole('button', { name: '2024年を表示' })).toHaveAttribute(
-    'aria-pressed',
-    'true',
-    { timeout: 10_000 },
-  )
-  await page.getByRole('button', { name: '年度の自動再生を停止', exact: true }).click()
+  await page.getByRole('combobox', { name: '対象年' }).selectOption('2024')
   await ready()
-  console.log('PASS: error recovery, empty data, timeline playback')
+  console.log('PASS: error recovery, empty data, sidebar year selection')
 
   await context.setGeolocation({ longitude: 141.3545, latitude: 43.0618 })
   await page.getByRole('button', { name: '現在地に戻る', exact: true }).click()
@@ -229,15 +223,17 @@ try {
       }, failure)
     }
     await fallbackPage.goto(process.env.APP_URL ?? 'http://127.0.0.1:5187/')
-    await expect(fallbackPage.locator('.location-notice')).toContainText(
-      failure === 'pending'
-        ? '現在地を取得中'
-        : failure === 'denied'
-          ? '位置情報が許可されていません'
+    if (failure === 'denied') {
+      await expect(fallbackPage.locator('.location-notice')).toHaveCount(0)
+    } else {
+      await expect(fallbackPage.locator('.location-notice')).toContainText(
+        failure === 'pending'
+          ? '現在地を取得中'
           : failure === 'outside'
             ? '現在地は地図の表示範囲外'
             : '現在地を取得できません',
-    )
+      )
+    }
     await expect(fallbackPage.getByRole('status')).toHaveAttribute('data-loading', 'false', {
       timeout: 60_000,
     })

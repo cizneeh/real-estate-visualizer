@@ -46,11 +46,11 @@ export function useCurrentLocation() {
       },
       (cause) => {
         if (requestId.current !== id) return
-        showError(
-          cause.code === 1
-            ? '位置情報が許可されていません。地図から地域を選ぶか、ブラウザの設定で許可してください。'
-            : '現在地を取得できませんでした。地図から地域を選ぶか、現在地ボタンで再試行してください。',
-        )
+        if (cause.code !== 1) {
+          showError(
+            '現在地を取得できませんでした。地図から地域を選ぶか、現在地ボタンで再試行してください。',
+          )
+        }
         setLocating(false)
       },
       { enableHighAccuracy: false, timeout: 10_000, maximumAge: 0 },
