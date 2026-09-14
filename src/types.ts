@@ -1,4 +1,6 @@
 export type Dataset = 'land' | 'survey' | 'transactions'
+export type DisplayDataset = Exclude<Dataset, 'survey'>
+export type LandSource = Exclude<Dataset, 'transactions'>
 export type LegacyDataset = Dataset | 'change'
 export type Metric = 'price' | 'change'
 export type ViewMode = '3d' | 'points' | 'heatmap'
@@ -6,6 +8,7 @@ export type Bounds = [number, number, number, number]
 
 export interface PricePoint {
   id: string
+  source?: LandSource
   historyId?: string
   location?: string
   coordinates: [number, number]
