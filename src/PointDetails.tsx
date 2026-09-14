@@ -4,7 +4,7 @@ import { historyStatusLabel, historyYears, periodLabel } from './history'
 import { changeLabel, priceLabel } from './metrics'
 import { PriceHistoryChart } from './PriceHistoryChart'
 import type { createTileQueries } from './tileQueries'
-import type { Dataset, PricePoint } from './types'
+import type { DisplayDataset, PricePoint } from './types'
 import { usePointHistory } from './usePointHistory'
 
 export interface PointSelection {
@@ -14,7 +14,7 @@ export interface PointSelection {
 
 interface Props {
   selection: PointSelection
-  dataset: Dataset
+  dataset: DisplayDataset
   year: number
   currentPoint?: PricePoint
   loading: boolean
@@ -58,7 +58,7 @@ export function PointDetails({
       : history.supported
         ? entry?.point
         : year === selection.year
-          ? selection.point
+          ? (currentPoint ?? selection.point)
           : undefined
   const identity = point ?? selection.point
   const pending = dataset === 'transactions' ? loading : entry?.status === 'loading'
@@ -82,7 +82,13 @@ export function PointDetails({
         <div className="detail-content" ref={content}>
           <h3>{identity.address}</h3>
           <p className="detail-town">{identity.municipality}</p>
-          <p className="detail-period">{periodLabel(dataset, 'price', year)}</p>
+          <p className="detail-period">
+            {dataset === 'transactions'
+              ? periodLabel(dataset, 'price', year)
+              : point
+                ? periodLabel(point.source ?? 'land', 'price', year)
+                : `${year}年の価格`}
+          </p>
           {point ? (
             <>
               <div className="detail-price">
@@ -94,9 +100,7 @@ export function PointDetails({
                   {point.change !== undefined &&
                     (point.change >= 0 ? <ArrowUpRight size={17} /> : <ArrowDownRight size={17} />)}
                   前年比 {changeLabel(point.change)}
-                  <span>
-                    （{year - 1} → {year}年）
-                  </span>
+                  <span>（{periodLabel(point.source ?? 'land', 'change', year)}）</span>
                 </div>
               )}
             </>
@@ -145,6 +149,9 @@ export function PointDetails({
                     entries={history.entries}
                     selectedYear={year}
                   />
+                  <p className="history-note">
+                    各年の公開価格のうち、同一地点は最新値を表示。前年比は採用した調査の前年値との比較です。
+                  </p>
                   {history.loading && (
                     <p className="history-progress">
                       <LoaderCircle size={13} className="spin" /> 各年の価格を取得中…
@@ -170,6 +177,12 @@ export function PointDetails({
             <details className="point-attributes">
               <summary>地点の情報</summary>
               <dl>
+                {point.source && (
+                  <>
+                    <dt>価格の出典</dt>
+                    <dd>{point.source === 'survey' ? '都道府県地価調査' : '地価公示'}</dd>
+                  </>
+                )}
                 {point.count !== undefined && (
                   <>
                     <dt>取引件数</dt>

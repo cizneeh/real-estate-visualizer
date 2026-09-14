@@ -1,4 +1,11 @@
-import type { Dataset, Metric, PricePoint } from './types'
+import {
+  LAND_LOCATION_TOLERANCE_METERS,
+  locationDistance,
+  mergeLandPoints,
+  normalizeLocation,
+  sameLandSite,
+} from './landPrices'
+import type { Dataset, DisplayDataset, Metric, PricePoint } from './types'
 import { FIRST_YEAR } from './years'
 
 export type HistoryStatus = 'ready' | 'loading' | 'missing' | 'changed' | 'error'
@@ -20,28 +27,41 @@ export function periodLabel(dataset: Dataset, metric: Metric, year: number) {
   return `${observationDate(dataset, year)}時点`
 }
 
+export function displayPeriodLabel(dataset: DisplayDataset, metric: Metric, year: number) {
+  if (dataset === 'transactions') return periodLabel(dataset, metric, year)
+  if (metric === 'change') return `${year - 1}年 → ${year}年（同じ調査の前年と比較）`
+  return year < FIRST_YEAR.survey
+    ? periodLabel('land', metric, year)
+    : `${year}年の公開価格（1月・7月時点）`
+}
+
 export function historyYears(dataset: Dataset, endYear: number, span: number | 'all') {
   const first = FIRST_YEAR[dataset]
   const start = span === 'all' ? first : Math.max(first, endYear - span)
   return Array.from({ length: Math.max(0, endYear - start + 1) }, (_, i) => start + i)
 }
 
-const normalizeLocation = (value: string) => value.normalize('NFKC').replace(/\s+/g, '')
-
 export function matchHistoryPoint(anchor: PricePoint, points: PricePoint[]) {
   if (!anchor.historyId || !anchor.location) return undefined
-  const candidate = points.find((point) => point.historyId === anchor.historyId)
+  const candidate = points.find(
+    (point) => point.historyId === anchor.historyId && point.source === anchor.source,
+  )
   if (!candidate) return undefined
-  const latitude = (anchor.coordinates[1] * Math.PI) / 180
-  const east = (candidate.coordinates[0] - anchor.coordinates[0]) * 111_320 * Math.cos(latitude)
-  const north = (candidate.coordinates[1] - anchor.coordinates[1]) * 111_320
   if (
     !candidate.location ||
     normalizeLocation(anchor.location) !== normalizeLocation(candidate.location) ||
-    Math.hypot(east, north) > 25
+    locationDistance(anchor, candidate) > LAND_LOCATION_TOLERANCE_METERS
   )
     return undefined
   return candidate
+}
+
+export function matchLandHistoryPoint(anchor: PricePoint, points: PricePoint[]) {
+  const candidates = mergeLandPoints(points)
+  const direct = matchHistoryPoint(anchor, candidates)
+  const counterparts = candidates.filter((point) => sameLandSite(anchor, point))
+  if (counterparts.length !== 1) return direct
+  return counterparts[0].source === 'survey' || !direct ? counterparts[0] : direct
 }
 
 export function historySegments(entries: HistoryEntry[]) {

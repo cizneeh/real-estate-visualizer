@@ -58,7 +58,15 @@ export function createTileQueries(fetcher = fetch) {
                   Number(response.headers.get('Retry-After')) || 0,
                 )
               }
-              return result as TileResponse
+              const tileResult = result as TileResponse
+              const source = sourceDataset(dataset)
+              return {
+                ...tileResult,
+                points: tileResult.points.map((point) => ({
+                  ...point,
+                  source: source === 'land' || source === 'survey' ? source : undefined,
+                })),
+              }
             },
             signal,
             priority,
