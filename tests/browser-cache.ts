@@ -42,7 +42,7 @@ await page.route('**/api/tiles/**', async (route) => {
   maximum = Math.max(maximum, active)
   if (priority === 'background') backgroundMaximum = Math.max(backgroundMaximum, ++backgroundActive)
   try {
-    if (key === centerKey && year === '2025') await slow
+    if (key === centerKey && year === '2026') await slow
     await new Promise((resolve) => setTimeout(resolve, year === '2021' ? 1500 : 60))
     if (key === centerKey && year === '2023' && failedTile) {
       await route.fulfill({ status: 502, json: { error: '一時的な取得失敗', upstreamStatus: 429 } })
@@ -129,14 +129,14 @@ try {
   assert.equal(foregroundCount(), beforeZoom)
   console.log('PASS: zoom in/out and a short pan reuse visible and prefetched tiles')
 
-  await page.getByRole('button', { name: '2024年を表示' }).click()
+  await page.getByRole('combobox', { name: '対象年' }).selectOption('2024')
   await ready()
   await expect(page.locator('.rank-row').first()).toContainText('2024年の地点')
   const beforeReturn = foregroundCount()
-  await page.getByRole('button', { name: '2025年を表示' }).click()
+  await page.getByRole('combobox', { name: '対象年' }).selectOption('2026')
   await ready()
   assert.equal(foregroundCount(), beforeReturn)
-  await expect(page.locator('.rank-row').first()).toContainText('2025年の地点')
+  await expect(page.locator('.rank-row').first()).toContainText('2026年の地点')
   await page.getByRole('button', { name: '前年比（%）' }).click()
   await ready()
   assert.equal(foregroundCount(), beforeReturn)
@@ -144,18 +144,18 @@ try {
     'PASS: returning to a cached year and switching land/change perform no new foreground fetch',
   )
 
-  await page.getByRole('button', { name: '2021年を表示' }).click()
+  await page.getByRole('combobox', { name: '対象年' }).selectOption('2021')
   await expect
     .poll(() => requests.filter((request) => request.year === '2021').length)
     .toBeGreaterThan(0)
-  await page.getByRole('button', { name: '2022年を表示' }).click()
+  await page.getByRole('combobox', { name: '対象年' }).selectOption('2022')
   await ready()
   await page.waitForTimeout(1700)
   await expect(page.locator('.rank-row').first()).toContainText('2022年の地点')
   assert.ok(cancelled > 0)
   console.log('PASS: obsolete requests are cancelled and cannot overwrite the selected year')
 
-  await page.getByRole('button', { name: '2023年を表示' }).click()
+  await page.getByRole('combobox', { name: '対象年' }).selectOption('2023')
   await expect(status).toContainText('一部の地域を取得できませんでした')
   await expect(page.locator('.rank-row').first()).toBeVisible()
   const successfulKeys = requests
@@ -187,19 +187,19 @@ try {
     'PASS: partial failures preserve successful tiles; retry only fetches the failed tile',
   )
 
-  await page.getByRole('button', { name: '2020年を表示' }).click()
+  await page.getByRole('combobox', { name: '対象年' }).selectOption('2020')
   await expect(status).toContainText('対象データがありません')
-  await page.getByRole('button', { name: '2025年を表示' }).click()
+  await page.getByRole('combobox', { name: '対象年' }).selectOption('2026')
   await ready()
   const beforeEmpty = foregroundCount()
-  await page.getByRole('button', { name: '2020年を表示' }).click()
+  await page.getByRole('combobox', { name: '対象年' }).selectOption('2020')
   await expect(status).toContainText('対象データがありません')
   assert.equal(foregroundCount(), beforeEmpty)
   await page.getByRole('button', { name: '全国を表示', exact: true }).click()
   await expect(status).toContainText('見たい地域を拡大すると')
   await page.waitForTimeout(1500)
   const beforeOverview = requests.length
-  await page.getByRole('button', { name: '2024年を表示' }).click()
+  await page.getByRole('combobox', { name: '対象年' }).selectOption('2024')
   await page.waitForTimeout(700)
   assert.equal(requests.length, beforeOverview)
   console.log('PASS: empty tiles are cached and national overview starts no tile requests')
