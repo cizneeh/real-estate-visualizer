@@ -2,6 +2,7 @@ import type { GeoJSONSource, Map as LibreMap } from 'maplibre-gl'
 import * as maplibregl from 'maplibre-gl'
 import workerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url'
 import { useEffect, useRef, useState } from 'react'
+import { hitNavigationTarget, navigateToLabel, navigationLayers } from './mapNavigation'
 import { configureBasemap } from './mapStyle'
 import { PRICE_COLORS, pointCollection } from './metrics'
 import { PriceColumnLayer } from './PriceColumnLayer'
@@ -156,14 +157,21 @@ export function MapCanvas(props: Props) {
         const id = features[0]?.properties?.id
         return latest.current.points.find((point) => point.id === id)
       }
+      const labelLayers = navigationLayers(map)
       map.on('click', (event) => {
         const point = hitPoint(event.point)
-        if (point) latest.current.onSelect(point)
+        if (point) {
+          latest.current.onSelect(point)
+          return
+        }
+        const target = hitNavigationTarget(map, event.point, labelLayers)
+        if (target) navigateToLabel(map, target)
       })
       map.on('mousemove', (event) => {
         const point = hitPoint(event.point)
         columns.setHovered(point?.id)
-        map.getCanvas().style.cursor = point ? 'pointer' : ''
+        const target = point ? undefined : hitNavigationTarget(map, event.point, labelLayers)
+        map.getCanvas().style.cursor = point || target ? 'pointer' : ''
       })
       map.getCanvas().addEventListener('mouseleave', () => columns.setHovered(undefined))
       setReady(true)
