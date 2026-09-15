@@ -26,7 +26,9 @@ test('both APIs request exactly the selected transaction type and keep the old d
       upstream.push(new URL(url))
       return {
         at: Date.now(),
-        features: [feature({ u_transaction_price_total_ja: '6,000万円', u_area_ja: '200㎡' })],
+        features: new URL(url).pathname.endsWith('/XKT015')
+          ? [feature({ S12_001_ja: '東京' })]
+          : [feature({ u_transaction_price_total_ja: '6,000万円', u_area_ja: '200㎡' })],
       }
     },
   })
@@ -37,6 +39,7 @@ test('both APIs request exactly the selected transaction type and keep the old d
       ['land', '01', '宅地（土地）'],
       ['land-building', '02', '宅地（土地と建物）'],
     ]) {
+      const before = upstream.length
       const response = await app.request(`${prefix}&transactionType=${type}`)
       assert.equal(response.status, 200)
       const body = await response.json()
@@ -44,7 +47,10 @@ test('both APIs request exactly the selected transaction type and keep the old d
       assert.equal(body.points[0].transactionType, type)
       assert.equal(body.points[0].category, category)
       assert.equal(body.points[0].price, 300_000)
-      const url = upstream.at(-1)
+      assert.equal(body.points[0].station, '東京')
+      const priceRequests = upstream.slice(before).filter((url) => url.pathname.endsWith('/XPT001'))
+      assert.equal(priceRequests.length, 1)
+      const url = priceRequests[0]
       assert.ok(url)
       assert.ok(url.pathname.endsWith('/XPT001'))
       assert.equal(url.searchParams.get('landTypeCode'), code)
@@ -53,7 +59,13 @@ test('both APIs request exactly the selected transaction type and keep the old d
       assert.equal(url.searchParams.get('to'), '20054')
     }
     assert.equal((await app.request(prefix)).status, 200)
-    assert.equal(upstream.at(-1)?.searchParams.get('landTypeCode'), '07')
+    assert.equal(
+      upstream
+        .filter((url) => url.pathname.endsWith('/XPT001'))
+        .at(-1)
+        ?.searchParams.get('landTypeCode'),
+      '07',
+    )
     const calls = upstream.length
     for (const invalid of ['', 'unknown', '01,02', '__proto__', 'toString']) {
       assert.equal((await app.request(`${prefix}&transactionType=${invalid}`)).status, 400)

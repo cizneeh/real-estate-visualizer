@@ -27,6 +27,11 @@ export function transactionStationId(point: PricePoint): string {
   return `station-${point.transactionType ?? point.category}-${point.coordinates.join(',')}`
 }
 
+export function stationAreaLabel(station?: string): string {
+  const name = station?.trim()
+  return name ? `${name}${name.endsWith('駅') ? '' : '駅'}周辺` : '駅周辺（駅名不明）'
+}
+
 export function groupTransactions(points: PricePoint[]): PricePoint[] {
   const groups = new Map<string, PricePoint[]>()
   for (const point of points) {
@@ -35,20 +40,27 @@ export function groupTransactions(points: PricePoint[]): PricePoint[] {
     group.push(point)
     groups.set(key, group)
   }
-  return [...groups.entries()].map(([key, group]) => ({
-    ...group[0],
-    id: key,
-    price: median(group.map((point) => point.price)) ?? 0,
-    address: `${group[0].municipality}の駅周辺`,
-    count: group.length,
-    change: undefined,
-    previousPrice: undefined,
-    area: undefined,
-    totalPrice: undefined,
-    usage: undefined,
-    zoning: undefined,
-    period: undefined,
-  }))
+  return [...groups.entries()].map(([key, group]) => {
+    const station = group.find((point) => point.station)?.station
+    return {
+      ...group[0],
+      id: key,
+      price: median(group.map((point) => point.price)) ?? 0,
+      address: stationAreaLabel(station),
+      station,
+      municipality: [...new Set(group.map((point) => point.municipality).filter(Boolean))]
+        .sort()
+        .join('・'),
+      count: group.length,
+      change: undefined,
+      previousPrice: undefined,
+      area: undefined,
+      totalPrice: undefined,
+      usage: undefined,
+      zoning: undefined,
+      period: undefined,
+    }
+  })
 }
 
 export function colorFor(point: PricePoint, metric: Metric) {

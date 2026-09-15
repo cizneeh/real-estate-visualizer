@@ -1,9 +1,9 @@
 import { serve } from '@hono/node-server'
 import { serveStatic } from '@hono/node-server/serve-static'
-import { config } from 'dotenv'
 import { createApp } from './app'
+import { loadEnvironment } from './environment'
 
-config({ quiet: true })
+loadEnvironment()
 const app = createApp(
   () =>
     process.env.REINFOLIB_API_KEY ??

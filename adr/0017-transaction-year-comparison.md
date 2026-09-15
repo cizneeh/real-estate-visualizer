@@ -2,7 +2,7 @@
 
 - 日付: 2026-09-15
 - 状態: 採用
-- 関連: [ADR 0009](0009-point-price-history.md)・[ADR 0012](0012-transaction-property-types.md)の取引価格を前年比の対象外とする判断を置換。土地価格の照合、種別分離、取引の長期履歴を提供しない方針は維持。
+- 関連: [ADR 0009](0009-point-price-history.md)・[ADR 0016](0016-transaction-property-types.md)の取引価格を前年比の対象外とする判断を置換。土地価格の照合、種別分離、取引の長期履歴を提供しない方針は維持。
 
 ## 背景
 

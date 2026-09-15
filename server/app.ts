@@ -25,6 +25,7 @@ import type {
 import { FIRST_YEAR, validYear } from '../src/years'
 import { browserCacheControl, type CacheStatus, type TileStore } from './cachePolicy'
 import { normalizePoint } from './data'
+import { nameTransactionStations } from './stations'
 import { createTileStore, UpstreamError } from './tileStore'
 
 const BASE_URL = 'https://www.reinfolib.mlit.go.jp/ex-api/external/'
@@ -83,11 +84,39 @@ export function createApp(
       if (point && tileKey(tileAt(point.coordinates, tile.z)) === tileKey(tile))
         points.set(point.id, point)
     })
+    let namedPoints = [...points.values()]
+    let cacheControl = browserCacheControl(url, entry)
+    if (dataset === 'transactions' && namedPoints.length) {
+      const stationParams = new URLSearchParams({
+        response_format: 'geojson',
+        z: String(tile.z),
+        x: String(tile.x),
+        y: String(tile.y),
+      })
+      const stationUrl = `${BASE_URL}XKT015?${stationParams}`
+      try {
+        const stations = await store.get(stationUrl, apiKey, signal, priority)
+        namedPoints = nameTransactionStations(namedPoints, stations.features)
+        const stationCacheControl = browserCacheControl(stationUrl, stations)
+        if (cacheControl === 'no-store' || stationCacheControl === 'no-store') {
+          cacheControl = 'no-store'
+        } else {
+          const maxAge = Math.min(
+            Number(cacheControl.split('max-age=')[1]),
+            Number(stationCacheControl.split('max-age=')[1]),
+          )
+          cacheControl = `public, max-age=${maxAge}`
+        }
+      } catch {
+        signal.throwIfAborted()
+        cacheControl = 'no-store'
+      }
+    }
     return {
-      points: [...points.values()],
+      points: namedPoints,
       fetchedAt: new Date(entry.at).toISOString(),
       ...(entry.cacheStatus === 'STALE' ? { stale: true } : {}),
-      cacheControl: browserCacheControl(url, entry),
+      cacheControl,
       cacheStatus: entry.cacheStatus,
     }
   }
