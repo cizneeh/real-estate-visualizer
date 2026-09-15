@@ -156,12 +156,12 @@ try {
   await page.screenshot({ path: `${destination}/history-fixture-mobile.png`, fullPage: true })
   await detail.getByRole('button', { name: '詳細を閉じる' }).click()
   await page.getByRole('button', { name: 'データパネルを開く' }).click()
-  await page.getByRole('button', { name: /マンション取引価格 中古マンション等の実取引/ }).click()
+  await page.getByRole('button', { name: /取引価格 種別ごとの実際の取引/ }).click()
   await expect(page.getByRole('button', { name: '価格', exact: true })).toHaveAttribute(
     'aria-pressed',
     'true',
   )
-  await expect(page.getByRole('button', { name: '前年比（%）', exact: true })).toBeDisabled()
+  await expect(page.getByRole('button', { name: '前年比（%）', exact: true })).toBeEnabled()
   assert.deepEqual(errors, [])
   console.log(
     'PASS: dataset/metric separation, shared cache, history identity, gaps, failure retry, year persistence, keyboard inspection, mobile layout, and transaction restrictions',

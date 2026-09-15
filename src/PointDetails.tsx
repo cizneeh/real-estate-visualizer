@@ -3,7 +3,10 @@ import { useCallback, useLayoutEffect, useRef, useState } from 'react'
 import { historyStatusLabel, historyYears, periodLabel } from './history'
 import { changeLabel, priceLabel } from './metrics'
 import { PriceHistoryChart } from './PriceHistoryChart'
+import { TransactionDetails } from './TransactionDetails'
 import type { createTileQueries } from './tileQueries'
+import type { TransactionSummary } from './transactionComparison'
+import { DEFAULT_TRANSACTION_TYPE, TRANSACTION_TYPES } from './transactions'
 import type { DisplayDataset, PricePoint } from './types'
 import { usePointHistory } from './usePointHistory'
 
@@ -19,6 +22,7 @@ interface Props {
   currentPoint?: PricePoint
   loading: boolean
   requests: ReturnType<typeof createTileQueries>
+  transactionSummary?: TransactionSummary
   onClose: () => void
 }
 
@@ -29,6 +33,7 @@ export function PointDetails({
   currentPoint,
   loading,
   requests,
+  transactionSummary,
   onClose,
 }: Props) {
   const scroller = useRef<HTMLElement>(null)
@@ -149,9 +154,6 @@ export function PointDetails({
                     entries={history.entries}
                     selectedYear={year}
                   />
-                  <p className="history-note">
-                    各年の公開価格のうち、同一地点は最新値を表示。前年比は採用した調査の前年値との比較です。
-                  </p>
                   {history.loading && (
                     <p className="history-progress">
                       <LoaderCircle size={13} className="spin" /> 各年の価格を取得中…
@@ -173,7 +175,10 @@ export function PointDetails({
               )}
             </section>
           )}
-          {point && (
+          {dataset === 'transactions' && transactionSummary && (
+            <TransactionDetails key={year} summary={transactionSummary} year={year} />
+          )}
+          {point && dataset !== 'transactions' && (
             <details className="point-attributes">
               <summary>地点の情報</summary>
               <dl>
@@ -181,12 +186,6 @@ export function PointDetails({
                   <>
                     <dt>価格の出典</dt>
                     <dd>{point.source === 'survey' ? '都道府県地価調査' : '地価公示'}</dd>
-                  </>
-                )}
-                {point.count !== undefined && (
-                  <>
-                    <dt>取引件数</dt>
-                    <dd>{point.count}件</dd>
                   </>
                 )}
                 {point.station && (
@@ -230,7 +229,9 @@ export function PointDetails({
           )}
           {dataset === 'transactions' && (
             <p className="detail-note">
-              {year}年の取引価格（㎡単価）の中央値。物件の所在地を示すものではありません。
+              {year}年の
+              {TRANSACTION_TYPES[identity.transactionType ?? DEFAULT_TRANSACTION_TYPE].priceMeaning}
+              の中央値。物件の所在地を示すものではありません。
             </p>
           )}
         </div>

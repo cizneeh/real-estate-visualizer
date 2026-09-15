@@ -4,11 +4,13 @@ export type LandSource = Exclude<Dataset, 'transactions'>
 export type LegacyDataset = Dataset | 'change'
 export type Metric = 'price' | 'change'
 export type ViewMode = '3d' | 'points' | 'heatmap'
+export type TransactionType = 'condominium' | 'land' | 'land-building'
 export type Bounds = [number, number, number, number]
 
 export interface PricePoint {
   id: string
   source?: LandSource
+  transactionType?: TransactionType
   historyId?: string
   location?: string
   coordinates: [number, number]
@@ -32,6 +34,7 @@ export interface DataResponse {
   points: PricePoint[]
   year: number
   dataset: LegacyDataset
+  transactionType?: TransactionType
   fetchedAt: string
   tiles: number
   failedTiles: number

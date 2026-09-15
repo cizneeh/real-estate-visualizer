@@ -22,7 +22,9 @@
     "prebuild": "npm run cf:types",
     "test:e2e:point-history": "tsx tests/browser-point-history.ts",
     "test:e2e:map-ui": "tsx tests/browser-map-ui.ts",
-    "test:e2e:land-prices": "tsx tests/browser-land-prices.ts"
+    "test:e2e:land-prices": "tsx tests/browser-land-prices.ts",
+    "test:e2e:transactions": "tsx tests/browser-transactions.ts",
+    "test:e2e:transaction-comparison": "tsx tests/browser-transaction-comparison.ts"
   },
   "dependencies": {
     "@hono/node-server": "^2.1.1",

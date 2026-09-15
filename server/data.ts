@@ -1,6 +1,12 @@
 import type { Feature, Point } from 'geojson'
 import { inBounds } from '../src/tiles'
-import { JAPAN_BOUNDS, type LegacyDataset, type PricePoint } from '../src/types'
+import { DEFAULT_TRANSACTION_TYPE, TRANSACTION_TYPES } from '../src/transactions'
+import {
+  JAPAN_BOUNDS,
+  type LegacyDataset,
+  type PricePoint,
+  type TransactionType,
+} from '../src/types'
 
 export { clipBounds, inBounds, tilesForBounds } from '../src/tiles'
 
@@ -16,10 +22,12 @@ export function numberValue(value: unknown): number | undefined {
 export function yenValue(value: unknown): number | undefined {
   if (typeof value !== 'string') return numberValue(value)
   const normalized = value.normalize('NFKC').replaceAll(',', '')
+  if (/以上|以下|未満|超/.test(normalized)) return undefined
   if (/[億万]/.test(normalized)) {
     const oku = normalized.match(/([\d.]+)億/)
     const man = normalized.match(/([\d.]+)万/)
-    return (oku ? Number(oku[1]) * 100_000_000 : 0) + (man ? Number(man[1]) * 10_000 : 0)
+    const sign = normalized.trimStart().startsWith('-') ? -1 : 1
+    return sign * ((oku ? Number(oku[1]) * 100_000_000 : 0) + (man ? Number(man[1]) * 10_000 : 0))
   }
   return numberValue(value)
 }
@@ -32,6 +40,7 @@ export function normalizePoint(
   feature: Feature,
   dataset: LegacyDataset,
   index: number | string,
+  transactionType: TransactionType = DEFAULT_TRANSACTION_TYPE,
 ): PricePoint | undefined {
   if (feature.geometry?.type !== 'Point') return undefined
   const coordinates = (feature.geometry as Point).coordinates as [number, number]
@@ -43,15 +52,16 @@ export function normalizePoint(
     const totalPrice = yenValue(p.u_transaction_price_total_ja)
     const price =
       yenValue(p.u_transaction_price_unit_price_square_meter_ja) ??
-      (area && totalPrice ? totalPrice / area : undefined)
-    if (!price || price <= 0) return undefined
+      (area && area > 0 && totalPrice && totalPrice > 0 ? totalPrice / area : undefined)
+    if (!price || !Number.isFinite(price) || price <= 0) return undefined
     return {
-      id: `transaction-${coordinates.join(',')}-${index}`,
+      id: `transaction-${transactionType}-${coordinates.join(',')}-${index}`,
+      transactionType,
       coordinates,
       price,
       address: [p.city_name_ja, p.district_name_ja].filter(Boolean).join(''),
       municipality: stringValue(p.city_name_ja) ?? '',
-      category: stringValue(p.land_type_name_ja) ?? '中古マンション等',
+      category: stringValue(p.land_type_name_ja) ?? TRANSACTION_TYPES[transactionType].label,
       totalPrice,
       area,
       period: stringValue(p.point_in_time_name_ja),

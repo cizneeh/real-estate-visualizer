@@ -120,7 +120,7 @@ try {
   await expect
     .poll(() => page.locator('.map-canvas').evaluate((e) => e.clientWidth))
     .toBeGreaterThan(expandedWidth)
-  for (const name of [/マンション取引/, /土地価格 土地1㎡/]) {
+  for (const name of [/取引価格 種別ごとの/, /土地価格 土地1㎡/]) {
     const button = sidebar.getByRole('button', { name })
     await button.click()
     await expect(button).toHaveAttribute('aria-pressed', 'true')

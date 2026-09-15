@@ -1,14 +1,18 @@
 import { useEffect, useRef } from 'react'
-import type { Bounds, Dataset, Metric, PricePoint } from './types'
+import { TRANSACTION_COMPARISON_NOTE, type TransactionPeriod } from './transactionComparison'
+import { TRANSACTION_TYPES } from './transactions'
+import type { Bounds, Dataset, Metric, PricePoint, TransactionType } from './types'
 
 interface MapState {
   dataset: Dataset
+  transactionType?: TransactionType
   metric: Metric
   year: number
   bounds?: Bounds
   loading: boolean
   error?: string
   points: PricePoint[]
+  comparisonPeriod?: TransactionPeriod
 }
 
 interface ModelContext {
@@ -62,9 +66,16 @@ export function useMapTools(state: MapState) {
         return {
           status: 'ready',
           dataset: current.dataset,
+          transactionType: current.transactionType,
+          priceMeaning: current.transactionType
+            ? TRANSACTION_TYPES[current.transactionType].priceMeaning
+            : undefined,
           metric: current.metric,
           comparisonYears:
             current.metric === 'change' ? [current.year - 1, current.year] : undefined,
+          comparisonPeriod: current.comparisonPeriod,
+          comparisonNote:
+            current.dataset === 'transactions' ? TRANSACTION_COMPARISON_NOTE : undefined,
           year: current.year,
           bounds: current.bounds,
           totalPoints: current.points.length,

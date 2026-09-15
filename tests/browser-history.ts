@@ -54,7 +54,7 @@ try {
   await select.selectOption('1997')
   await ready(1997)
   await expect(select.locator('option').first()).toHaveAttribute('value', '1995')
-  await page.getByRole('button', { name: /マンション取引価格 中古マンション等/ }).click()
+  await page.getByRole('button', { name: /取引価格 種別ごとの実際の取引/ }).click()
   await ready(2005)
   await page.getByRole('button', { name: 'データ・表示について' }).click()
   await expect(page.getByRole('dialog')).toContainText('2005年の取引は7〜12月のみ')
@@ -72,7 +72,7 @@ try {
 
   const lastYear = new Date().getFullYear()
   for (const [name, firstYear] of [
-    [/マンション取引価格 中古マンション等/, 2005],
+    [/取引価格 種別ごとの実際の取引/, 2005],
     [/土地価格 土地1㎡あたりの価格/, 1995],
   ] as const) {
     await page.getByRole('button', { name }).click()

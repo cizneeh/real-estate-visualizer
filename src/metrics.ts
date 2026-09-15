@@ -5,6 +5,7 @@ export const PRICE_COLORS = ['#568faf', '#6a93cd', '#998ddd', '#c793d2', '#ea95a
 export const PRICE_STOPS = [0, 300_000, 700_000, 1_500_000, 5_000_000, 15_000_000]
 export const CHANGE_COLORS = ['#668be6', '#9cb9e9', '#a4c7c7', '#77d8bc', '#edda8e', '#ffaf75']
 export const CHANGE_STOPS = [-5, 0, 2, 5, 10, 20]
+export const MISSING_CHANGE_COLOR = '#919ba5'
 
 export function median(values: number[]): number | undefined {
   if (!values.length) return undefined
@@ -22,6 +23,10 @@ export function changeLabel(value?: number): string {
   return value === undefined ? '—' : `${value > 0 ? '+' : ''}${value.toFixed(1)}%`
 }
 
+export function transactionStationId(point: PricePoint): string {
+  return `station-${point.transactionType ?? point.category}-${point.coordinates.join(',')}`
+}
+
 export function stationAreaLabel(station?: string): string {
   const name = station?.trim()
   return name ? `${name}${name.endsWith('駅') ? '' : '駅'}周辺` : '駅周辺（駅名不明）'
@@ -30,7 +35,7 @@ export function stationAreaLabel(station?: string): string {
 export function groupTransactions(points: PricePoint[]): PricePoint[] {
   const groups = new Map<string, PricePoint[]>()
   for (const point of points) {
-    const key = point.coordinates.join(',')
+    const key = transactionStationId(point)
     const group = groups.get(key) ?? []
     group.push(point)
     groups.set(key, group)
@@ -39,7 +44,7 @@ export function groupTransactions(points: PricePoint[]): PricePoint[] {
     const station = group.find((point) => point.station)?.station
     return {
       ...group[0],
-      id: `station-${key}`,
+      id: key,
       price: median(group.map((point) => point.price)) ?? 0,
       address: stationAreaLabel(station),
       station,
@@ -47,6 +52,8 @@ export function groupTransactions(points: PricePoint[]): PricePoint[] {
         .sort()
         .join('・'),
       count: group.length,
+      change: undefined,
+      previousPrice: undefined,
       area: undefined,
       totalPrice: undefined,
       usage: undefined,
@@ -57,6 +64,7 @@ export function groupTransactions(points: PricePoint[]): PricePoint[] {
 }
 
 export function colorFor(point: PricePoint, metric: Metric) {
+  if (metric === 'change' && point.change === undefined) return MISSING_CHANGE_COLOR
   const value = metric === 'change' ? (point.change ?? 0) : point.price
   const stops = metric === 'change' ? CHANGE_STOPS : PRICE_STOPS
   const colors = metric === 'change' ? CHANGE_COLORS : PRICE_COLORS

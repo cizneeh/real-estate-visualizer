@@ -2,6 +2,11 @@ import { serve } from '@hono/node-server'
 import { serveStatic } from '@hono/node-server/serve-static'
 import type { Feature } from 'geojson'
 import { createApp } from '../../server/app'
+import {
+  DEFAULT_TRANSACTION_TYPE,
+  TRANSACTION_TYPES,
+  transactionTypes,
+} from '../../src/transactions'
 
 const center = [139.7671, 35.6812]
 const point = (properties: Record<string, unknown>, coordinates = center): Feature => ({
@@ -18,14 +23,20 @@ const app = createApp(() => 'fixture-key', {
     if (url.pathname.endsWith('/XKT015')) {
       features = [point({ S12_001_ja: '東京' })]
     } else if (url.pathname.endsWith('/XPT001')) {
-      features = [50_000_000, 70_000_000].map((price) =>
+      const transactionYear = Number(url.searchParams.get('from')?.slice(0, 4))
+      const type =
+        transactionTypes.find(
+          (type) => TRANSACTION_TYPES[type].code === url.searchParams.get('landTypeCode'),
+        ) ?? DEFAULT_TRANSACTION_TYPE
+      const factor = type === 'land' ? 0.25 : type === 'land-building' ? 0.5 : 1
+      features = [40_000_000, 50_000_000, 60_000_000, 70_000_000, 80_000_000].map((price) =>
         point({
-          u_transaction_price_total_ja: `${price}円`,
+          u_transaction_price_total_ja: `${price * factor * (transactionYear === 2024 ? 5 / 6 : 1)}円`,
           u_area_ja: '50㎡',
           city_name_ja: '千代田区',
           district_name_ja: '丸の内',
-          land_type_name_ja: '中古マンション等',
-          point_in_time_name_ja: '2025年第4四半期',
+          land_type_name_ja: TRANSACTION_TYPES[type].label,
+          point_in_time_name_ja: `${transactionYear}年第2四半期`,
         }),
       )
     } else if (url.pathname.endsWith('/XPT002')) {

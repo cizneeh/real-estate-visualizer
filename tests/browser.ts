@@ -98,7 +98,7 @@ try {
   await ready()
   await page.screenshot({ path: `${destination}/land-survey-heatmap.png`, fullPage: true })
 
-  await page.getByRole('button', { name: /マンション取引価格 中古マンション等の実取引/ }).click()
+  await page.getByRole('button', { name: /取引価格 種別ごとの実際の取引/ }).click()
   await ready()
   await expect(page.locator('.summary-foot')).toContainText('件の取引')
   await page.getByTitle('ポイント表示', { exact: true }).click()
