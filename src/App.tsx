@@ -224,7 +224,7 @@ export function App() {
       >
         <header className="brand">
           <div className="brand-mark">
-            <Layers3 size={24} strokeWidth={1.5} />
+            <img src="/landloom.svg" alt="" width={24} height={24} />
           </div>
           <h1>Landloom</h1>
           <button
