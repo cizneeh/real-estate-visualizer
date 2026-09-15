@@ -1,8 +1,8 @@
-# 街の値段
+# Landloom
 
 国土交通省「不動産情報ライブラリ」のデータを、地図・3D・ヒートマップで探索するWebアプリです。全国を対象にしています。初期表示は東京駅周辺です。位置情報を取得できた場合は現在地の周辺へ移動します。
 
-公開先: [real-estate-visualize.echizen.me](https://real-estate-visualize.echizen.me)
+公開先: [landloom.echizen.me](https://landloom.echizen.me)
 
 ## 起動
 

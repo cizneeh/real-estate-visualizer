@@ -7,9 +7,9 @@ import { UpstreamError } from '../server/tileStore'
 
 test('the public API accepts its own origin and rejects other websites', async () => {
   const app = createApp(() => 'server-only-secret')
-  const url = 'https://real-estate-visualize.echizen.me/api/health'
+  const url = 'https://landloom.echizen.me/api/health'
   const response = await app.request(url, {
-    headers: { Origin: 'https://real-estate-visualize.echizen.me' },
+    headers: { Origin: 'https://landloom.echizen.me' },
   })
   assert.equal(response.status, 200)
   assert.deepEqual(await response.json(), { configured: true })
@@ -31,7 +31,7 @@ test('separate Worker requests reuse cached empty tiles without caching credenti
   let calls = 0
   const options = {
     cache,
-    origin: 'https://real-estate-visualize.echizen.me',
+    origin: 'https://landloom.echizen.me',
     waitUntil: (promise: Promise<unknown>) => writes.push(promise),
     requestGate: new EdgeRequestGate(4, 0),
     fetcher: async () => {

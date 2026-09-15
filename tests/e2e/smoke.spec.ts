@@ -11,7 +11,7 @@ import {
 
 test('land prices, year selection, history, and all rendering modes', async ({ page }, info) => {
   await page.goto('/')
-  await expect(page).toHaveTitle('街の値段')
+  await expect(page).toHaveTitle('Landloom')
   await ready(page)
   await openPanel(page)
   const year = page.getByRole('combobox', { name: '対象年' })

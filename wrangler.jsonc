@@ -7,7 +7,7 @@
   "compatibility_flags": ["nodejs_compat"],
   "workers_dev": true,
   "preview_urls": false,
-  "routes": [{ "pattern": "real-estate-visualize.echizen.me", "custom_domain": true }],
+  "routes": [{ "pattern": "landloom.echizen.me", "custom_domain": true }],
   "assets": {
     "directory": "./dist",
     "not_found_handling": "single-page-application",

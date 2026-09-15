@@ -226,7 +226,7 @@ export function App() {
           <div className="brand-mark">
             <Layers3 size={24} strokeWidth={1.5} />
           </div>
-          <h1>街の値段</h1>
+          <h1>Landloom</h1>
           <button
             ref={sidebarToggle}
             className="icon-button sidebar-toggle"
