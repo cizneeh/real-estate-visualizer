@@ -1,4 +1,3 @@
-import { LoaderCircle } from 'lucide-react'
 import { useId, useState } from 'react'
 import { type HistoryEntry, historySegments, historyStatusLabel } from './history'
 import { changeLabel, priceLabel } from './metrics'
@@ -20,6 +19,7 @@ export function PriceHistoryChart({ entries, selectedYear, loading }: Props) {
   const padding = Math.max((max - min) * 0.2, max * 0.025, 1)
   const { svg, low, high } = useHistoryChartAnimation(
     entries,
+    loading,
     Math.max(0, min - padding),
     max + padding,
   )
@@ -168,11 +168,6 @@ export function PriceHistoryChart({ entries, selectedYear, loading }: Props) {
           </>
         ) : (
           <p className="history-empty">この期間に表示できる価格データがありません。</p>
-        )}
-        {loading && (
-          <p className="history-progress" role="status">
-            <LoaderCircle size={13} className="spin" aria-hidden="true" /> 読み込み中
-          </p>
         )}
       </div>
       <details className="history-table">

@@ -2,12 +2,16 @@ import { useLayoutEffect, useRef, useState } from 'react'
 import type { HistoryEntry } from './history'
 import { historyLineReveals } from './historyAnimation'
 
-export function useHistoryChartAnimation(entries: HistoryEntry[], low: number, high: number) {
+export function useHistoryChartAnimation(
+  entries: HistoryEntry[],
+  loading: boolean,
+  low: number,
+  high: number,
+) {
   const svg = useRef<SVGSVGElement>(null)
   const previousYears = useRef(
     new Set(entries.filter((entry) => entry.point).map(({ year }) => year)),
   )
-  const arrivals = useRef(new Map<number, number>())
   const animations = useRef(new Set<Animation>())
   const hasValues = entries.some((entry) => entry.point)
   const hadValues = useRef(hasValues)
@@ -31,8 +35,14 @@ export function useHistoryChartAnimation(entries: HistoryEntry[], low: number, h
   useLayoutEffect(() => {
     const previous = previousYears.current
     previousYears.current = new Set(entries.filter((entry) => entry.point).map(({ year }) => year))
-    if (!svg.current || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return
-    const now = performance.now()
+    const added = entries.filter((entry) => entry.point && !previous.has(entry.year))
+    if (!loading || added.length) {
+      for (const animation of animations.current) animation.finish()
+      animations.current.clear()
+    }
+    if (!loading || !svg.current || window.matchMedia('(prefers-reduced-motion: reduce)').matches)
+      return
+    const arrivals = new Map<number, number>()
     const animate = (element: Element, keyframes: Keyframe[], duration: number, delay = 0) => {
       const animation = element.animate(keyframes, {
         duration,
@@ -46,30 +56,27 @@ export function useHistoryChartAnimation(entries: HistoryEntry[], low: number, h
     for (const reveal of historyLineReveals(entries, previous)) {
       const line = svg.current.querySelector(`.history-line[data-year="${reveal.startYear}"]`)
       if (!line) continue
-      const from = reveal.reverse ? reveal.endYear : reveal.startYear
       const to = reveal.reverse ? reveal.startYear : reveal.endYear
-      const delay = Math.max(reveal.delay, (arrivals.current.get(from) ?? now) - now)
-      const arrival = now + delay + reveal.duration
-      arrivals.current.set(to, Math.min(arrivals.current.get(to) ?? arrival, arrival))
+      const arrival = reveal.delay + reveal.duration
+      arrivals.set(to, Math.min(arrivals.get(to) ?? arrival, arrival))
       animate(
         line,
         [{ strokeDashoffset: reveal.reverse ? -1 : 1 }, { strokeDashoffset: 0 }],
         reveal.duration,
-        delay,
+        reveal.delay,
       )
     }
-    for (const entry of entries) {
-      if (!entry.point || previous.has(entry.year)) continue
+    for (const entry of added) {
       const dot = svg.current.querySelector(`.history-dot[data-year="${entry.year}"]`)
       if (dot)
         animate(
           dot,
           [{ opacity: 0 }, { opacity: 1 }],
-          180,
-          Math.max(0, (arrivals.current.get(entry.year) ?? now) - now - 90),
+          90,
+          Math.max(0, (arrivals.get(entry.year) ?? 0) - 90),
         )
     }
-  }, [entries])
+  }, [entries, loading])
 
   useLayoutEffect(() => {
     const from = rangeRef.current
@@ -83,7 +90,7 @@ export function useHistoryChartAnimation(entries: HistoryEntry[], low: number, h
       cancelAnimationFrame(frame)
       update({ low, high })
     }
-    const shouldAnimate = hadValues.current && hasValues && !reduced.matches
+    const shouldAnimate = loading && hadValues.current && hasValues && !reduced.matches
     hadValues.current = hasValues
     if (!shouldAnimate) {
       finish()
@@ -92,7 +99,7 @@ export function useHistoryChartAnimation(entries: HistoryEntry[], low: number, h
     if (from.low === low && from.high === high) return
     const started = performance.now()
     const tick = (now: number) => {
-      const progress = Math.min(1, (now - started) / 360)
+      const progress = Math.min(1, (now - started) / 180)
       const eased = 1 - (1 - progress) ** 3
       update({
         low: from.low + (low - from.low) * eased,
@@ -109,7 +116,7 @@ export function useHistoryChartAnimation(entries: HistoryEntry[], low: number, h
       cancelAnimationFrame(frame)
       reduced.removeEventListener('change', onMotionChange)
     }
-  }, [low, high, hasValues])
+  }, [low, high, hasValues, loading])
 
   return { svg, low: range.low, high: range.high }
 }

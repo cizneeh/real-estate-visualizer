@@ -83,5 +83,5 @@ test('a large batch finishes within one short reveal instead of making users wai
     new Set([2025]),
   )
   assert.equal(reveals.length, 30)
-  assert.ok(reveals.every(({ duration, delay }) => duration > 0 && delay + duration <= 900))
+  assert.ok(reveals.every(({ duration, delay }) => duration > 0 && delay + duration <= 300))
 })

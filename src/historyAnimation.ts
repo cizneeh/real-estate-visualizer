@@ -28,7 +28,7 @@ export function historyLineReveals(entries: HistoryEntry[], previousYears: Set<n
             },
           ],
     )
-    const duration = Math.min(480, 900 / Math.max(1, ...steps.map(({ step }) => step + 1)))
+    const duration = Math.min(180, 300 / Math.max(1, ...steps.map(({ step }) => step + 1)))
     for (const { step, ...edge } of steps) {
       reveals.push({ ...edge, delay: step * duration, duration })
     }
