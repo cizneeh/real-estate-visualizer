@@ -153,12 +153,8 @@ export function PointDetails({
                     key={`${year}-${span}`}
                     entries={history.entries}
                     selectedYear={year}
+                    loading={history.loading}
                   />
-                  {history.loading && (
-                    <p className="history-progress">
-                      <LoaderCircle size={13} className="spin" /> 各年の価格を取得中…
-                    </p>
-                  )}
                   {history.failed && (
                     <div className="history-error" role="alert">
                       一部の年を取得できませんでした。
