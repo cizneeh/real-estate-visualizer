@@ -1331,12 +1331,25 @@ p {
   stroke: #49616d;
   stroke-width: 0.6;
 }
+.history-loading-band {
+  fill: #9bd8c6;
+  opacity: 0.08;
+  animation: history-loading-pulse 2.4s ease-in-out infinite;
+  pointer-events: none;
+}
+@keyframes history-loading-pulse {
+  50% {
+    opacity: 0.2;
+  }
+}
 .history-line {
   fill: none;
   stroke: #8cdbc0;
   stroke-width: 2.5;
   stroke-linecap: round;
   stroke-linejoin: round;
+  stroke-dasharray: 1;
+  stroke-dashoffset: 0;
 }
 .history-dot {
   fill: #a4ead0;
@@ -1348,23 +1361,29 @@ p {
   stroke-dasharray: 3 4;
 }
 .history-empty {
-  padding: 20px 0;
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0;
+  padding: 20px 8px;
+  text-align: center;
   font-size: 13px;
   line-height: 1.8;
   color: #adc4ce;
 }
 .history-note,
-.history-progress,
 .history-error {
   color: #aac0cb;
   font-size: 11px;
   line-height: 1.8;
   margin-top: 10px;
 }
-.history-progress {
-  display: flex;
-  align-items: center;
-  gap: 5px;
+@media (prefers-reduced-motion: reduce) {
+  .history-loading-band {
+    animation: none;
+  }
 }
 .history-error {
   color: #f1bf9e;
@@ -1537,6 +1556,7 @@ p {
 
 .history-plot {
   position: relative;
+  aspect-ratio: 348 / 177;
 }
 .history-hit {
   position: absolute;
