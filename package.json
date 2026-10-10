@@ -28,7 +28,7 @@
   },
   "dependencies": {
     "@hono/node-server": "^2.1.1",
-    "@tanstack/react-query": "^5.103.2",
+    "@tanstack/react-query": "^5.104.1",
     "hono": "^4.13.8",
     "lucide-react": "^1.46.0",
     "maplibre-gl": "^6.11.0",
